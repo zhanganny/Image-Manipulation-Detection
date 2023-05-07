@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from utils.anchors import _enumerate_shifted_anchor, generate_anchor_base
-from utils.utils_bbox import loc2bbox
+from utils.utils_bbox import loc2bbox, bbox_match
 
 
 # class RPN(nn.Module):
@@ -168,14 +168,16 @@ class RPN(nn.Module):
 
         # step 3: 利用建议框网络的预测结果对先验框进行调整，调整后会对调整后的先验框进行筛选获得最终的建议框
         rois        = list()
+        scores      = list()
         roi_indices = list()    # 指明 roi 属于 batch 里哪一个样本
         for i in range(n):
-            roi         = self.proposal_layer(rpn_locs[i], rpn_fg_scores[i], anchor, img_size, scale=scale)
+            roi, score = self.proposal_layer(rpn_locs[i], rpn_fg_scores[i], anchor, img_size, scale=scale)
             batch_index = i * torch.ones((len(roi),))  
             rois.append(roi.unsqueeze(0))
+            scores.append(score.unsqueeze(0))
             roi_indices.append(batch_index.unsqueeze(0))
 
-        rois        = torch.cat(rois, dim=0).type_as(x)
+        rois,       = torch.cat(rois, dim=0).type_as(x)
         roi_indices = torch.cat(roi_indices, dim=0).type_as(x)
         anchor      = torch.from_numpy(anchor).unsqueeze(0).float().to(x.device)
         # 之后会用到这个建议框对共享特征层进行截取，截取之后进行roi pooling的操作，把大小固定到一样的shape上
@@ -191,15 +193,18 @@ class RPN(nn.Module):
                 对于 0.3 <= IoU < 0.7 的，不计算 Loss
             """
             assert annotations is not None
-            for roi in rois:
-                annotation = annotations[roi]
-            # 计算 RPN classification loss
-            rpn_label = 0
+            gt_bboxes = []
+            for i in len(roi):
+                roi_index = roi_indices[i]
+                annotation = annotations[roi_index]
+                gt_bboxes.append(annotation)
 
-            self.rpn_loss_cls = F.cross_entropy(rpn_cls_score, rpn_label)
-            
-            # 计算 RPN bbox regression loss
-            self.rpn_loss_box = nn.SmoothL1Loss(rpn_bbox_pred, rpn_bbox_targets, rpn_bbox_inside_weights)
+            # 每个roi的标签，有效roi下标，正样本roi下标
+            labels, valid_indices, pos_indices = \
+                bbox_match(rois, gt_bboxes, neg_thres=0.3, pos_thres=0.7)
+
+            self.rpn_loss_cls = F.cross_entropy(scores[valid_indices], labels[valid_indices])
+            self.rpn_loss_box = nn.SmoothL1Loss(annotations[pos_indices], gt_bboxes[pos_indices])
 
         return rpn_locs, rpn_scores, rois, roi_indices, anchor
 
@@ -224,22 +229,14 @@ class ProposalCreator():
         min_size            = 16
     
     ):
-        #-----------------------------------#
         #   设置预测还是训练
-        #-----------------------------------#
         self.mode               = mode
-        #-----------------------------------#
         #   建议框非极大抑制的iou大小
-        #-----------------------------------#
         self.nms_iou            = nms_iou
-        #-----------------------------------#
         #   训练用到的建议框数量
-        #-----------------------------------#
         self.n_train_pre_nms    = n_train_pre_nms
         self.n_train_post_nms   = n_train_post_nms
-        #-----------------------------------#
         #   预测用到的建议框数量
-        #-----------------------------------#
         self.n_test_pre_nms     = n_test_pre_nms
         self.n_test_post_nms    = n_test_post_nms
         self.min_size           = min_size
@@ -283,5 +280,6 @@ class ProposalCreator():
             keep        = torch.cat([keep, keep[index_extra]])
         keep    = keep[:n_post_nms]
         roi     = roi[keep]
+        score   = score[keep]
 
-        return roi
+        return roi, score[1]
