@@ -1,9 +1,9 @@
 import torch.nn as nn
 
-from nets.classifier import Resnet50RoIHead, VGG16RoIHead
-from nets.resnet50 import resnet50
-from nets.rpn import RegionProposalNetwork
-from nets.vgg16 import decom_vgg16
+from model.backbone import resnet50
+from model.networks import Resnet50RoIHead  #, VGG16RoIHead
+# from model.networs.rpn import RegionProposalNetwork
+# from model.networs.vgg16 import decom_vgg16
 
 
 class Fusion_FasterRCNN(nn.Module):
@@ -42,7 +42,7 @@ class Fusion_FasterRCNN(nn.Module):
             # TODO
             pass
             
-    def forward(self, x, scale=1., mode="forward", annotation=None):
+    def forward(self, x, scale=1., mode="forward", annotations=None):
         if mode == "forward":
             #---------------------------------#
             #   计算输入图片的大小
@@ -61,7 +61,7 @@ class Fusion_FasterRCNN(nn.Module):
             #   The RGB and noise streams share the same region proposals 
             #   from RPN network which only uses RGB features as input.
             #---------------------------------#
-            _, _, rois, roi_indices, _  = self.rpn.forward(base_feature_rgb, img_size, scale)
+            _, _, rois, roi_indices, _  = self.rpn.forward(base_feature_rgb, img_size, scale, annotations)
             #---------------------------------------#
             #   获得classifier的分类结果和回归结果
             #---------------------------------------#
