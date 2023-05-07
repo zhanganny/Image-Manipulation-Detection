@@ -4,7 +4,7 @@ import torch.nn as nn
 from utils import nms
 
 
-class Detector:
+class Detector(nn.Module):
     def __init__(self, 
                 backbone: nn.Module, 
                 srm: nn.Module,
@@ -21,9 +21,14 @@ class Detector:
         self.classifier_layer = None
 
     def forward(self, imgs):
+        # noise
         noise = self.srm_filter_layer(imgs)
+
+        # extract features
         rgb_feature = self.rgb_conv_layers(imgs)
         noise_feature = self.noise_conv_layers(noise)
+        
+        # proposal regions of interest
         bboxes, scores = self.rpn_layer(rgb_feature)
 
         keep = nms(bboxes, scores)

@@ -11,7 +11,7 @@ from torchvision.transforms import transforms
 
 from data import Train, Test
 
-
+/
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--batch_size', default=1)
