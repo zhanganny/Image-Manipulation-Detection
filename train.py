@@ -24,7 +24,7 @@ if __name__ == '__main__':
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, betas=(5e-3, 5e-3))
 
     for epoch in range(args.iteration):
-        # model.train()
+        model.train()
         for step, (imgs, annotations) in enumerate(trainloader):
             # print(imgs, annotations)
 
@@ -39,3 +39,4 @@ if __name__ == '__main__':
 
         if epoch % 5 == 0:
             print("checkpoint {}".format(epoch))
+            model.eval()
