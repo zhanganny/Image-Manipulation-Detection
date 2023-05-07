@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+from torch.nn import functional as F
+from utils.anchors import _enumerate_shifted_anchor, generate_anchor_base
+from utils.utils_bbox import loc2bbox
 
 
 # class RPN(nn.Module):
@@ -95,6 +97,7 @@ import torch.nn.functional as F
 # from utils.anchors import _enumerate_shifted_anchor, generate_anchor_base
 # from utils.utils_bbox import loc2bbox
 
+
 class RPN(nn.Module):
     def __init__(
         self, 
@@ -140,42 +143,35 @@ class RPN(nn.Module):
         normal_init(self.score, 0, 0.01)
         normal_init(self.loc, 0, 0.01)
 
-    def forward(self, x, img_size, scale=1.):
+    def forward(self, x, img_size, scale=1., annotations=None):
         n, _, h, w = x.shape
-        #-----------------------------------------#
-        #   先进行一个3x3的卷积，可理解为特征整合
-        #-----------------------------------------#
-        x = F.relu(self.conv1(x))
-        #-----------------------------------------#
-        #   回归预测对先验框进行调整
-        #-----------------------------------------#
-        rpn_locs = self.loc(x)
+
+        # step 1: RPN 预测与回归
+        #  预处理: 3*3 conv 特征整合
+        x = F.relu(self.conv1(x)) 
+
+        #  分支1: 1*1 conv 回归 bbox 相对于先验框 anchor 框的偏移  -> [[dx, dy, dw, dh], ...]
+        rpn_locs = self.loc(x) 
         rpn_locs = rpn_locs.permute(0, 2, 3, 1).contiguous().view(n, -1, 4)
-        #-----------------------------------------#
-        #   分类预测先验框内部是否包含物体
-        #-----------------------------------------#
+
+        #  分支2: 1*1 conv + softmax 预测正负样本 -> [[P(true), P(false)], ...]
         rpn_scores = self.score(x)
-        rpn_scores = rpn_scores.permute(0, 2, 3, 1).contiguous().view(n, -1, 2)
-        
-         #--------------------------------------------------------------------------------------#
-        #   进行softmax概率计算，每个先验框只有两个判别结果
-        #   内部包含物体或者内部不包含物体，rpn_softmax_scores[:, :, 1]的内容为包含物体的概率
-        #--------------------------------------------------------------------------------------#
+        rpn_scores = rpn_scores.permute(0, 2, 3, 1).contiguous().view(n, -1, 2)        
         rpn_softmax_scores  = F.softmax(rpn_scores, dim=-1)
         rpn_fg_scores       = rpn_softmax_scores[:, :, 1].contiguous()
         rpn_fg_scores       = rpn_fg_scores.view(n, -1)
-        # step1 上面是获得建议框网络的生成结果
-        # step2 下面是获得先验框
-        #------------------------------------------------------------------------------------------------#
+
+        # step 2: 下面是获得先验框
         #   生成先验框，此时获得的anchor是布满网格点的，当输入图片为600,600,3的时候，shape为(12996, 4)
-        #------------------------------------------------------------------------------------------------#
+        # 生成 anchor [[x1, y1, x2, y2], ...]
         anchor = _enumerate_shifted_anchor(np.array(self.anchor_base), self.feat_stride, h, w)
-        # step3 利用建议框网络的预测结果对先验框进行调整，调整后会对调整后的先验框进行筛选获得最终的建议框
+
+        # step 3: 利用建议框网络的预测结果对先验框进行调整，调整后会对调整后的先验框进行筛选获得最终的建议框
         rois        = list()
-        roi_indices = list()
+        roi_indices = list()    # 指明 roi 属于 batch 里哪一个样本
         for i in range(n):
-            roi         = self.proposal_layer(rpn_locs[i], rpn_fg_scores[i], anchor, img_size, scale = scale)
-            batch_index = i * torch.ones((len(roi),))
+            roi         = self.proposal_layer(rpn_locs[i], rpn_fg_scores[i], anchor, img_size, scale=scale)
+            batch_index = i * torch.ones((len(roi),))  
             rois.append(roi.unsqueeze(0))
             roi_indices.append(batch_index.unsqueeze(0))
 
@@ -183,7 +179,37 @@ class RPN(nn.Module):
         roi_indices = torch.cat(roi_indices, dim=0).type_as(x)
         anchor      = torch.from_numpy(anchor).unsqueeze(0).float().to(x.device)
         # 之后会用到这个建议框对共享特征层进行截取，截取之后进行roi pooling的操作，把大小固定到一样的shape上
+
+        # 训练时计算 RPN Loss
+        self.rpn_loss_cls = 0
+        self.rpn_loss_box = 0
+        if self.mode == 'training': 
+            """
+            所有 roi 中: 
+                对于 IoU >= 0.7 的，认为其 p* 是 1 
+                对于 IoU < 0.3 的，认为其 p* 是 0
+                对于 0.3 <= IoU < 0.7 的，不计算 Loss
+            """
+            assert annotations is not None
+            for roi in rois:
+                annotation = annotations[roi]
+            # 计算 RPN classification loss
+            rpn_label = 0
+
+            self.rpn_loss_cls = F.cross_entropy(rpn_cls_score, rpn_label)
+            
+            # 计算 RPN bbox regression loss
+            self.rpn_loss_box = nn.SmoothL1Loss(rpn_bbox_pred, rpn_bbox_targets, rpn_bbox_inside_weights)
+
         return rpn_locs, rpn_scores, rois, roi_indices, anchor
+
+    def loss(self, lamb=10):
+        if self.rpn_loss_cls is None or self.rpn_loss_box is None:
+            return 0
+        return self.rpn_loss_cls + lamb * self.rpn_loss_box
+
+    def dump(self, path):
+        pass
 
 
 class ProposalCreator():
@@ -226,49 +252,36 @@ class ProposalCreator():
             n_pre_nms   = self.n_test_pre_nms
             n_post_nms  = self.n_test_post_nms
 
-        #-----------------------------------#
-        #   将先验框转换成tensor
-        #-----------------------------------#
+        # 转为与 loc 相同的数据类型 Tensor
         anchor = torch.from_numpy(anchor).type_as(loc)
-        #-----------------------------------#
-        #   将RPN网络预测结果转化成建议框
-        #-----------------------------------#
+
+        # 基本框 anchor + 偏移 loc = 候选框 roi
         roi = loc2bbox(anchor, loc)
-        #-----------------------------------#
-        #   防止建议框超出图像边缘
-        #-----------------------------------#
+        
+        # 裁剪候选框超出图像边缘的部分
         roi[:, [0, 2]] = torch.clamp(roi[:, [0, 2]], min = 0, max = img_size[1])
         roi[:, [1, 3]] = torch.clamp(roi[:, [1, 3]], min = 0, max = img_size[0])
         
-        #-----------------------------------#
-        #   建议框的宽高的最小值不可以小于16
-        #-----------------------------------#
+        # 建议框的宽高的最小值不可以小于16
         min_size    = self.min_size * scale
         keep        = torch.where(((roi[:, 2] - roi[:, 0]) >= min_size) & ((roi[:, 3] - roi[:, 1]) >= min_size))[0]
-        #-----------------------------------#
-        #   将对应的建议框保留下来
-        #-----------------------------------#
         roi         = roi[keep, :]
         score       = score[keep]
 
-        #-----------------------------------#
-        #   根据得分进行排序，取出建议框
-        #-----------------------------------#
+        # 取置信度前 n_pre_nms 高的候选框
         order       = torch.argsort(score, descending=True)
-        if n_pre_nms > 0:
+        if n_pre_nms > 0 and len(order) < n_pre_nms:
             order   = order[:n_pre_nms]
         roi     = roi[order, :]
         score   = score[order]
 
-        #-----------------------------------#
-        #   对建议框进行非极大抑制
-        #   使用官方的非极大抑制会快非常多
-        #-----------------------------------#
+        # 对建议框进行非极大抑制
+        # 取置信度前 n_post_nms 高的候选框
         keep    = nms(roi, score, self.nms_iou)
         if len(keep) < n_post_nms:
             index_extra = np.random.choice(range(len(keep)), size=(n_post_nms - len(keep)), replace=True)
             keep        = torch.cat([keep, keep[index_extra]])
         keep    = keep[:n_post_nms]
         roi     = roi[keep]
-        # 筛选后的建议框
+
         return roi
