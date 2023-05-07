@@ -1,8 +1,10 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-from utils.anchors import _enumerate_shifted_anchor, generate_anchor_base
-from utils.utils_bbox import loc2bbox, bbox_match
+from utils import _enumerate_shifted_anchor, \
+                  generate_anchor_base, \
+                  loc2bbox, \
+                  bbox_match
 
 
 # class RPN(nn.Module):
@@ -100,19 +102,22 @@ from utils.utils_bbox import loc2bbox, bbox_match
 
 class RPN(nn.Module):
     def __init__(
-        self, 
-        in_channels     = 512, 
-        mid_channels    = 512, 
-        ratios          = [0.5, 1, 2],
-        anchor_scales   = [8, 16, 32], 
-        feat_stride     = 16,
-        mode            = "training",
-    ):
+            self, 
+            in_channels=512, 
+            mid_channels=512, 
+            anchor_ratios=[0.5, 1, 2],
+            anchor_scales=[8, 16, 32], 
+            feat_stride=16,
+            mode="training",
+        ):
         super(RPN, self).__init__()
         #-----------------------------------------#
         #   生成基础先验框，shape为[9, 4]
         #-----------------------------------------#
-        self.anchor_base    = generate_anchor_base(anchor_scales = anchor_scales, ratios = ratios)
+        self.anchor_base = generate_anchor_base(
+                            anchor_scales=anchor_scales, 
+                            ratios=anchor_ratios
+                           )
         n_anchor            = self.anchor_base.shape[0]
 
         #-----------------------------------------#
@@ -139,9 +144,9 @@ class RPN(nn.Module):
         #--------------------------------------#
         #   对FPN的网络部分进行权值初始化
         #--------------------------------------#
-        normal_init(self.conv1, 0, 0.01)
-        normal_init(self.score, 0, 0.01)
-        normal_init(self.loc, 0, 0.01)
+        # normal_init(self.conv1, 0, 0.01)
+        # normal_init(self.score, 0, 0.01)
+        # normal_init(self.loc, 0, 0.01)
 
         self.rpn_loss_cls = 0
         self.rpn_loss_box = 0
