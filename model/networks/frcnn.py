@@ -42,7 +42,7 @@ class Fusion_FasterRCNN(nn.Module):
             # TODO
             pass
             
-    def forward(self, x, scale=1., mode="forward"):
+    def forward(self, x, scale=1., mode="forward", annotation=None):
         if mode == "forward":
             #---------------------------------#
             #   计算输入图片的大小
@@ -87,6 +87,13 @@ class Fusion_FasterRCNN(nn.Module):
             #---------------------------------------#
             roi_cls_locs, roi_scores    = self.head.forward(base_feature, rois, roi_indices, img_size)
             return roi_cls_locs, roi_scores
+
+    def zero_loss(self):
+        self.rpn.zero_loss()
+        self.head.zero_loss()
+
+    def loss(self):
+        return self.rpn.loss() + self.head.loss()
 
     def freeze_bn(self):
         for m in self.modules():

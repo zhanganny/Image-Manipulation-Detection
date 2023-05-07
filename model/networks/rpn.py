@@ -143,6 +143,9 @@ class RPN(nn.Module):
         normal_init(self.score, 0, 0.01)
         normal_init(self.loc, 0, 0.01)
 
+        self.rpn_loss_cls = 0
+        self.rpn_loss_box = 0
+
     def forward(self, x, img_size, scale=1., annotations=None):
         n, _, h, w = x.shape
 
@@ -183,8 +186,6 @@ class RPN(nn.Module):
         # 之后会用到这个建议框对共享特征层进行截取，截取之后进行roi pooling的操作，把大小固定到一样的shape上
 
         # 训练时计算 RPN Loss
-        self.rpn_loss_cls = 0
-        self.rpn_loss_box = 0
         if self.mode == 'training': 
             """
             所有 roi 中: 
@@ -203,14 +204,16 @@ class RPN(nn.Module):
             labels, valid_indices, pos_indices = \
                 bbox_match(rois, gt_bboxes, neg_thres=0.3, pos_thres=0.7)
 
-            self.rpn_loss_cls = F.cross_entropy(scores[valid_indices], labels[valid_indices])
-            self.rpn_loss_box = nn.SmoothL1Loss(annotations[pos_indices], gt_bboxes[pos_indices])
+            self.rpn_loss_cls += nn.CrossEntropyLoss(scores[valid_indices], labels[valid_indices])
+            self.rpn_loss_box += nn.SmoothL1Loss(rois[pos_indices], gt_bboxes[pos_indices])
 
         return rpn_locs, rpn_scores, rois, roi_indices, anchor
 
+    def zero_loss(self):
+        self.rpn_loss_cls = 0
+        self.rpn_loss_box = 0
+
     def loss(self, lamb=10):
-        if self.rpn_loss_cls is None or self.rpn_loss_box is None:
-            return 0
         return self.rpn_loss_cls + lamb * self.rpn_loss_box
 
     def dump(self, path):
