@@ -111,7 +111,7 @@ class ResNet(nn.Module):
         x = self.fc(x)
         return x
 
-def resnet50(pretrained = False):
+def make_resnet50(pretrained = False):
     model = ResNet(Bottleneck, [3, 4, 6, 3])
     if pretrained:
         state_dict = load_state_dict_from_url("https://download.pytorch.org/models/resnet50-19c8e357.pth", model_dir="./model_data")

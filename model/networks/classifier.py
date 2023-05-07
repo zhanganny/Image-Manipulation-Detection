@@ -31,7 +31,8 @@ class Resnet50RoIHead(nn.Module):
         normal_init(self.score, 0, 0.01)
 
         self.roi = RoIPool((roi_size, roi_size), spatial_scale)
-        self.bilinear = nn.Bilinear(1024, 1024, 16384)
+        # self.bilinear = nn.Bilinear(1024, 1024, 16384)
+        self.bilinear = nn.Bilinear(1024, 1024, 2048)
 
         self.loss_tamper = 0
         self.loss_bbox = 0
