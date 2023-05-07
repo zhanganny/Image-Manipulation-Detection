@@ -1,13 +1,12 @@
 import os
-import yaml
 import argparse
-import torch
 import numpy as np
-import matplotlib.pyplot as plt
-from PIL import Image
+
+import torch
 from torch.utils.data import DataLoader
 from torchvision.transforms import transforms
 
+from module import Detector
 from data import Train, Test
 
 
@@ -20,7 +19,7 @@ if __name__ == '__main__':
     trainset = Train('D:/Datasets/coco_tampered/')
     trainloader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True)
 
-    model = None # TODO: create faster R-CNN model
+    model = Detector()
     
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, betas=(5e-3, 5e-3))
     lossRPN = torch.nn.MSELoss().cuda()
@@ -32,8 +31,7 @@ if __name__ == '__main__':
         for step, (imgs, annotations) in enumerate(trainloader):
             # print(imgs, annotations)
 
-            # model.forword
-
+            model(imgs, annotations)
             # calculate the loss
 
             optimizer.zero_grad()
