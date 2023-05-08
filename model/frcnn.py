@@ -3,7 +3,7 @@ import torchvision
 
 from model.backbone import resnet50
 from model.networks import Resnet50RoIHead  #, VGG16RoIHead
-from model.networks import RPN
+from model.networks import RPN, SRMLayer
 # from model.networs.vgg16 import decom_vgg16
 
 
@@ -23,7 +23,7 @@ class Fusion_FasterRCNN(nn.Module):
         self.anchor_scales = anchor_scales
         self.anchor_ratios = anchor_ratios
 
-        self.srm_filter_layer = None #TODO
+        self.srm_filter_layer = SRMLayer()
         
         if backbone == 'resnet50':
             self.extractor, classifier = resnet50(pretrained)
