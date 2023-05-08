@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class SRMLayer(nn.Module):
@@ -25,10 +26,16 @@ class SRMLayer(nn.Module):
         filter2 = torch.tensor(filter2, dtype=torch.float) / self.q[1]
         filter3 = torch.tensor(filter3, dtype=torch.float) / self.q[2]
         filters = torch.stack([filter1, filter2, filter3], dim=2)  # shape=(5,5,3)
-
         initializer_srm = nn.init.constant_(nn.Parameter(filters), filters)
         self.conv = nn.Conv2d(3, 3, kernel_size=5, stride=1, padding=2, bias=False)  # same填充方式填充kernel_size/2（向下取整）；valid不填充
         self.conv.weight = initializer_srm
+        # self.weight = initializer_srm
+
+    def train():
+        self.eval()
 
     def forward(self, x):
-        return self.conv(x)
+        # x = F.conv2d(input=x, weight=self.weight, bias=None, 
+        #              stride=1, padding=0, dilation=1, groups=1)
+        x = self.conv(x)
+        return x
