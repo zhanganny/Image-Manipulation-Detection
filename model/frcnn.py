@@ -1,8 +1,9 @@
 import torch.nn as nn
+import torchvision
 
-from .backbone import make_resnet50
-from .networks import Resnet50RoIHead  #, VGG16RoIHead
-from .networks import RPN
+from model.backbone import resnet50
+from model.networks import Resnet50RoIHead  #, VGG16RoIHead
+from model.networks import RPN
 # from model.networs.vgg16 import decom_vgg16
 
 
@@ -25,9 +26,12 @@ class Fusion_FasterRCNN(nn.Module):
         self.srm_filter_layer = None #TODO
         
         if backbone == 'resnet50':
-            self.extractor, classifier = make_resnet50(pretrained)
+            self.extractor, classifier = resnet50(pretrained)
         elif backbone == 'resnet101':
-            raise NotImplementedError()
+            resnet_net = torchvision.models.resnet101(pretrained=True)
+            modules = list(resnet_net.children())[:-1]
+            self.extractor = nn.Sequential(*modules)
+            backbone.out_channels = 2048
 
         self.rpn = RPN(
                 in_channels=1024, 
@@ -46,6 +50,7 @@ class Fusion_FasterRCNN(nn.Module):
             )
             
     def forward(self, x, scale=1., mode="forward", annotations=None):
+        print(x.size())
         if mode == "forward":
             #---------------------------------#
             #   计算输入图片的大小
@@ -55,40 +60,39 @@ class Fusion_FasterRCNN(nn.Module):
             #   利用主干网络提取特征
             #   RGB 和 noise使用同一backbone
             #---------------------------------#
-            base_feature_rgb    = self.extractor.forward(x)
             noise_x = self.srm_filter_layer(x)
-            base_feature_rgb    = self.extractor.forward(x)
-            base_feature_noise = self.extractor.forward(noise_x)
+            base_feature_rgb = self.extractor(x)
+            base_feature_noise = self.extractor(noise_x)
             #---------------------------------#
             #   获得建议框
             #   The RGB and noise streams share the same region proposals 
             #   from RPN network which only uses RGB features as input.
             #---------------------------------#
-            _, _, rois, roi_indices, _  = self.rpn.forward(base_feature_rgb, img_size, scale, annotations)
+            _, _, rois, roi_indices, _  = self.rpn(base_feature_rgb, img_size, scale, annotations)
             #---------------------------------------#
             #   获得classifier的分类结果和回归结果
             #---------------------------------------#
-            roi_cls_locs, roi_scores    = self.head.forward(base_feature_rgb, base_feature_noise, rois, roi_indices, img_size)
+            roi_cls_locs, roi_scores    = self.head(base_feature_rgb, base_feature_noise, rois, roi_indices, img_size)
             return roi_cls_locs, roi_scores, rois, roi_indices
         elif mode == "extractor":
             #---------------------------------#
             #   利用主干网络提取特征
             #---------------------------------#
-            base_feature    = self.extractor.forward(x)
+            base_feature    = self.extractor(x)
             return base_feature
         elif mode == "rpn":
             base_feature, img_size = x
             #---------------------------------#
             #   获得建议框
             #---------------------------------#
-            rpn_locs, rpn_scores, rois, roi_indices, anchor = self.rpn.forward(base_feature, img_size, scale)
+            rpn_locs, rpn_scores, rois, roi_indices, anchor = self.rpn(base_feature, img_size, scale)
             return rpn_locs, rpn_scores, rois, roi_indices, anchor
         elif mode == "head":
             base_feature, rois, roi_indices, img_size = x
             #---------------------------------------#
             #   获得classifier的分类结果和回归结果
             #---------------------------------------#
-            roi_cls_locs, roi_scores    = self.head.forward(base_feature, rois, roi_indices, img_size)
+            roi_cls_locs, roi_scores    = self.head(base_feature, rois, roi_indices, img_size)
             return roi_cls_locs, roi_scores
 
     def zero_loss(self):

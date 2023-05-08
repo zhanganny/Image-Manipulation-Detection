@@ -1,6 +1,7 @@
 import os
 from PIL import Image
 
+import torch
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 
@@ -29,8 +30,8 @@ class Train(Dataset):
         item = Image.open(path).convert('RGB')
         if self.transforms is not None:
             item = self.transforms(item)
-
-        return item, self.annotations[index]
+            annotation = torch.Tensor(self.annotations[index])
+        return item, annotation
 
     def __len__(self):
         return len(self.paths)
