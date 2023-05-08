@@ -1,6 +1,9 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+from torchvision.ops import nms
+
+import numpy as np
 from utils import _enumerate_shifted_anchor, \
                   generate_anchor_base, \
                   loc2bbox, \
@@ -111,6 +114,7 @@ class RPN(nn.Module):
             mode="training",
         ):
         super(RPN, self).__init__()
+        self.mode = mode
         #-----------------------------------------#
         #   生成基础先验框，shape为[9, 4]
         #-----------------------------------------#

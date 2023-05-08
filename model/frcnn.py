@@ -14,8 +14,8 @@ class Fusion_FasterRCNN(nn.Module):
                  feat_stride = 16,
                  anchor_scales = [8, 16, 32],
                  anchor_ratios = [0.5, 1, 2],
-                 backbone = 'resnet50',
-                 pretrained = False
+                 backbone = 'resnet101',
+                 pretrained = True
                 ):
         super(Fusion_FasterRCNN, self).__init__()
         self.mode = "tarining"
