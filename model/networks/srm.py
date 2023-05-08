@@ -1,6 +1,8 @@
+import cv2
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
 
 
 class SRMLayer(nn.Module):
@@ -39,3 +41,18 @@ class SRMLayer(nn.Module):
         #              stride=1, padding=0, dilation=1, groups=1)
         x = self.conv(x)
         return x
+
+
+def test_srm(img):
+    srm = SRMLayer()
+    noise = srm(img)
+    plt.subplot(121)
+    plt.imshow(srm)
+    plt.subplot(122)
+    plt.imshow(noise)
+    plt.show()
+
+
+if __name__ == '__main__':
+    img = cv2.imread('lena.png')
+    test_srm(img)
