@@ -1,1 +1,1 @@
-from .resnet50 import ResNet, make_resnet50
+from .resnet import resnet50

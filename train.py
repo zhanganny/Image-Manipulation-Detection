@@ -26,10 +26,8 @@ if __name__ == '__main__':
     for epoch in range(args.iteration):
         model.train()
         for step, (imgs, annotations) in enumerate(trainloader):
-            # print(imgs, annotations)
-
+            print(imgs.size(), annotations)
             model(imgs, annotations=annotations)
-            # calculate the loss
 
             optimizer.zero_grad()
             loss = model.loss()
