@@ -19,7 +19,7 @@ if __name__ == '__main__':
     trainset = Train('D:/Datasets/coco_tampered/')
     trainloader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True)
 
-    model = Fusion_FasterRCNN(512)
+    model = Fusion_FasterRCNN(512).cuda()
     
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, betas=(5e-3, 5e-3))
 
@@ -27,8 +27,10 @@ if __name__ == '__main__':
         model.train()
         for step, (imgs, annotations) in enumerate(trainloader):
             print(imgs.size(), annotations)
-            model(imgs, annotations=annotations)
+            imgs = imgs.cuda()
+            annotations = annotations.cuda()
 
+            model(imgs, annotations=annotations)
             optimizer.zero_grad()
             loss = model.loss()
             model.zero_loss()

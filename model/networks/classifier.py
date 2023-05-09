@@ -111,6 +111,10 @@ class Resnet50RoIHead(nn.Module):
 
         return roi_bbox, roi_scores
 
+    def train(self, mode=True):
+        super().train()
+        self.classifier.eval()
+
     def zero_loss(self):
         self.loss_tamper = 0
         self.loss_bbox = 0
