@@ -73,9 +73,10 @@ def tst_srm(img_path, noise_path):
     # 显示噪声图片
     cv2.imshow('Noise Image', noise_img)
     cv2.imwrite(noise_path, noise_img)
+    cv2.waitKey()
 
 
 if __name__ == '__main__':
-    img_path = '../../lena.png'
-    noise_path = '../../noise.png'
+    img_path = 'lena.png'
+    noise_path = 'noise.png'
     tst_srm(img_path, noise_path)

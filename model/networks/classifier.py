@@ -6,7 +6,7 @@ import torch.nn.functional as F
 
 from torchvision.ops import RoIPool
 from utils.utils_bbox import bbox_match
-
+from CompactBilinearPooling import CompactBilinearPooling
 
 warnings.filterwarnings("ignore")
 
@@ -32,7 +32,7 @@ class Resnet50RoIHead(nn.Module):
 
         self.roi = RoIPool((roi_size, roi_size), spatial_scale)
         # self.bilinear = nn.Bilinear(1024, 1024, 16384)
-        self.bilinear = nn.Bilinear(1024, 1024, 1024)
+        self.bilinear = CompactBilinearPooling(1024, 1024, 2048, cuda=False)
 
         self.loss_tamper = 0
         self.loss_bbox = 0
@@ -81,9 +81,9 @@ class Resnet50RoIHead(nn.Module):
         bi_feature = self.bilinear(pool_rgb, pool_noise)
 
         # step 4: Class Pres        
-        fc7_bilinear = self.classifier(bi_feature)
+        # fc7_bilinear = self.classifier(bi_feature)
         #   当输入为一张图片的时候，这里获得的f7的shape为[300, 2048]
-        fc7_bilinear = fc7_rgb.view(fc7_binear.size(0), -1)
+        # fc7_bilinear = fc7_rgb.view(fc7_binear.size(0), -1)
         # fc7即为roi feature
         roi_scores = self.cls_pred(fc7_binear)
         roi_scores = roi_scores.view(n, -1, roi_scores.size(1))

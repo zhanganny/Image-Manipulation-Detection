@@ -41,8 +41,8 @@ class Fusion_FasterRCNN(nn.Module):
 
         self.head = Resnet50RoIHead(
                 n_class=num_classes + 1,
-                roi_size=14,
-                spatial_scale=1,
+                roi_size=7,
+                spatial_scale=0.0625, # 1 / 16
                 classifier=classifier
             )
             
