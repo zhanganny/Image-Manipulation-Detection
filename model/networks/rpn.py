@@ -192,6 +192,7 @@ class RPN(nn.Module):
 
         rois = torch.cat(rois, dim=0).type_as(x)
         scores = torch.cat(scores, dim=0)
+        print(rois.size(), scores.size())
         # roi_indices = torch.cat(roi_indices, dim=0).type_as(x)
         anchor = torch.from_numpy(anchor).unsqueeze(0).float().to(x.device)
         # 之后会用到这个建议框对共享特征层进行截取，截取之后进行roi pooling的操作，把大小固定到一样的shape上
