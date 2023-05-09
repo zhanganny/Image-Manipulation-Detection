@@ -82,7 +82,8 @@ class Resnet50RoIHead(nn.Module):
         roi_scores = self.cls_pred(bi_feature)
         roi_scores = roi_scores.view(n, -1, roi_scores.size(1))
 
-        if self.mode == 'training':
+        # 训练时计算 RPN Loss
+        if self.mode == 'training': 
             """
             所有 roi 中: 
                 对于 IoU >= 0.7 的，认为其 p* 是 1 
@@ -90,18 +91,13 @@ class Resnet50RoIHead(nn.Module):
                 对于 0.3 <= IoU < 0.7 的，不计算 Loss
             """
             assert annotations is not None
-            gt_bboxes = []
-            for i in range(len(rois)):
-                roi_index = roi_indices[i]
-                annotation = annotations[roi_index]
-                gt_bboxes.append(annotation)
-
             # 每个roi的标签，有效roi下标，正样本roi下标
             labels, valid_indices, pos_indices = \
-                bbox_match(roi_bbox, gt_bboxes, neg_thres=0.3, pos_thres=0.7)
+                bbox_match(roi_bbox, annotations, neg_thres=0.3, pos_thres=0.7)
 
-            self.loss_tamper += nn.CrossEntropyLoss(roi_scores, labels[valid_indices])
-            self.loss_bbox += nn.SmoothL1Loss(roi_bbox, gt_bboxes[pos_indices])
+            for i in pos_indices:
+                self.loss_tamper += nn.SmoothL1Loss(roi_bbox[i], annotations[0])
+            self.loss_bbox = nn.CrossEntropyLoss(roi_scores[valid_indices], labels[valid_indices])
 
         return roi_bbox, roi_scores
 

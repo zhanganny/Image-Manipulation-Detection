@@ -11,6 +11,9 @@ def bbox_match(boxes1, boxes2, pos_thres=0.7, neg_thres=0.3):
         boxes1 (Tensor[N, 4]) first set of boxes
         boxes2 (Tensor[M, 4]) second set of boxes
     """
+    assert boxes2.size(0) == 1 # 仅考虑1个annotation
+    ious = torchvision.ops.box_iou(boxes1, boxes2) # [N, 1]
+    ious = ious.squeeze(1)
     
     ones = torch.ones(ious.size())
     zeros = torch.zeros(ious.size())
@@ -18,10 +21,9 @@ def bbox_match(boxes1, boxes2, pos_thres=0.7, neg_thres=0.3):
     res = torch.where(ious < neg_thres, zeros, ious)
     res = torch.where(ious >= pos_thres, ones, res)
 
-    print(ious.size())
-    valid_indices = torch.nonzero(ious < neg_thres or ious >= pos_thres, as_tuple=False)
-    pos_indices = torch.nonzero(ious >= pos_thres, as_tuple=False)
-    
+    pos_indices = torch.nonzero(ious >= pos_thres, as_tuple=False).squeeze(1).tolist()
+    valid_indices = torch.nonzero((ious < neg_thres) + (ious >= pos_thres), as_tuple=False).squeeze(1).tolist()
+
     return res, valid_indices, pos_indices
 
 

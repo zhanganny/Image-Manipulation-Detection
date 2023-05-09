@@ -191,6 +191,7 @@ class RPN(nn.Module):
             roi_indices += batch_index
 
         rois = torch.cat(rois, dim=0).type_as(x)
+        scores = torch.cat(scores, dim=0)
         # roi_indices = torch.cat(roi_indices, dim=0).type_as(x)
         anchor = torch.from_numpy(anchor).unsqueeze(0).float().to(x.device)
         # 之后会用到这个建议框对共享特征层进行截取，截取之后进行roi pooling的操作，把大小固定到一样的shape上
@@ -204,15 +205,13 @@ class RPN(nn.Module):
                 对于 0.3 <= IoU < 0.7 的，不计算 Loss
             """
             assert annotations is not None
-
-            gt_bboxes = torch.cat(gt_bboxes, dim=0)
             # 每个roi的标签，有效roi下标，正样本roi下标
-            print(rois.size(), gt_bboxes.size())
             labels, valid_indices, pos_indices = \
                 bbox_match(rois, annotations, neg_thres=0.3, pos_thres=0.7)
 
-            self.rpn_loss_cls += nn.CrossEntropyLoss(scores[valid_indices], labels[valid_indices])
-            self.rpn_loss_box += nn.SmoothL1Loss(rois[pos_indices], gt_bboxes[pos_indices])
+            for i in pos_indices:
+                self.rpn_loss_box += nn.SmoothL1Loss(rois[i], annotations[0])
+            self.rpn_loss_cls = nn.CrossEntropyLoss(scores[valid_indices], labels[valid_indices])
 
         return rpn_locs, rpn_scores, rois, roi_indices, anchor
 
