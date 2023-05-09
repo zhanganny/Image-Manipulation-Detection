@@ -35,7 +35,7 @@ class SRMLayer(nn.Module):
         self.conv = nn.Conv2d(in_channels=3, out_channels=3, kernel_size=5, stride=1, padding=2,
                               bias=False)  # 输入和输出通道数都为3，卷积核大小为5x5，stride为1，padding为2（same填充方式填充kernel_size/2（向下取整）；valid不填充）
         self.conv.weight.data = nn.Parameter(filters)
-        print(self.conv.weight)
+        # print(self.conv.weight)
 
     def forward(self, x):
         x = self.conv(x)

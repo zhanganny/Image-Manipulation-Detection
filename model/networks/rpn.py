@@ -184,14 +184,15 @@ class RPN(nn.Module):
         roi_indices = list()    # 指明 roi 属于 batch 里哪一个样本
         for i in range(n):
             roi, score = self.proposal_layer(rpn_locs[i], rpn_fg_scores[i], anchor, img_size, scale=scale)
-            batch_index = i * torch.ones((len(roi),))  
-            rois.append(roi.unsqueeze(0))
+            # batch_index = i * torch.ones((len(roi),))  
+            batch_index = [i] * len(roi)
+            rois.append(roi)
             scores.append(score.unsqueeze(0))
-            roi_indices.append(batch_index)
+            roi_indices += batch_index
 
-        rois,       = torch.cat(rois, dim=0).type_as(x)
-        roi_indices = torch.cat(roi_indices, dim=0).type_as(x)
-        anchor      = torch.from_numpy(anchor).unsqueeze(0).float().to(x.device)
+        rois = torch.cat(rois, dim=0).type_as(x)
+        # roi_indices = torch.cat(roi_indices, dim=0).type_as(x)
+        anchor = torch.from_numpy(anchor).unsqueeze(0).float().to(x.device)
         # 之后会用到这个建议框对共享特征层进行截取，截取之后进行roi pooling的操作，把大小固定到一样的shape上
 
         # 训练时计算 RPN Loss
@@ -203,15 +204,12 @@ class RPN(nn.Module):
                 对于 0.3 <= IoU < 0.7 的，不计算 Loss
             """
             assert annotations is not None
-            gt_bboxes = []
-            for i in len(roi):
-                roi_index = roi_indices[i]
-                annotation = annotations[roi_index]
-                gt_bboxes.append(annotation)
 
+            gt_bboxes = torch.cat(gt_bboxes, dim=0)
             # 每个roi的标签，有效roi下标，正样本roi下标
+            print(rois.size(), gt_bboxes.size())
             labels, valid_indices, pos_indices = \
-                bbox_match(rois, gt_bboxes, neg_thres=0.3, pos_thres=0.7)
+                bbox_match(rois, annotations, neg_thres=0.3, pos_thres=0.7)
 
             self.rpn_loss_cls += nn.CrossEntropyLoss(scores[valid_indices], labels[valid_indices])
             self.rpn_loss_box += nn.SmoothL1Loss(rois[pos_indices], gt_bboxes[pos_indices])
