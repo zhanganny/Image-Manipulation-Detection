@@ -19,20 +19,20 @@ class Resnet50RoIHead(nn.Module):
         #--------------------------------------#
         #   对ROIPooling后的的结果进行回归预测
         #--------------------------------------#
-        self.cls_loc = nn.Linear(2048, n_class * 4)
+        self.bbox_pred = nn.Linear(2048, 4)
         #-----------------------------------#
         #   对ROIPooling后的的结果进行分类
         #-----------------------------------#
-        self.score = nn.Linear(2048, n_class)
-        #-----------------------------------#
+        self.cls_pred = nn.Linear(2048, 2)
+        #----------------------------，-------#
         #   权值初始化
         #-----------------------------------#
-        normal_init(self.cls_loc, 0, 0.001)
-        normal_init(self.score, 0, 0.01)
+        normal_init(self.bbox_pred, 0, 0.001)
+        normal_init(self.cls_pred, 0, 0.01)
 
         self.roi = RoIPool((roi_size, roi_size), spatial_scale)
         # self.bilinear = nn.Bilinear(1024, 1024, 16384)
-        self.bilinear = nn.Bilinear(1024, 1024, 2048)
+        self.bilinear = nn.Bilinear(1024, 1024, 1024)
 
         self.loss_tamper = 0
         self.loss_bbox = 0
@@ -50,8 +50,8 @@ class Resnet50RoIHead(nn.Module):
         if x.is_cuda:
             roi_indices = roi_indices.cuda()
             rois = rois.cuda()
-        rois        = torch.flatten(rois, 0, 1)
-        roi_indices = torch.flatten(roi_indices, 0, 1)
+        # rois        = torch.flatten(rois, 0, 1)
+        # roi_indices = torch.flatten(roi_indices, 0, 1)
         
         rois_feature_map_rgb = torch.zeros_like(rois)
         rois_feature_map_noise = torch.zeros_like(rois)
@@ -74,23 +74,19 @@ class Resnet50RoIHead(nn.Module):
         #   - 当输入为一张图片的时候，这里获得的f7的shape为[300, 2048]
         fc7_rgb = fc7_rgb.view(fc7_rgb.size(0), -1)
         #   - fc7即为roi feature
-        roi_cls_locs_rgb    = self.cls_loc(fc7_rgb)
-        roi_cls_locs_rgb    = roi_cls_locs_rgb.view(n, -1, roi_cls_locs.size(1))
+        roi_bbox = self.bbox_pred(fc7_rgb)
+        roi_bbox = roi_bbox.view(n, -1, roi_bbox.size(1))
 
         # step 3: Bilnear Pooling
         bi_feature = self.bilinear(pool_rgb, pool_noise)
 
         # step 4: Class Pres        
-        fc7_noise = self.classifier(bi_feature)
+        fc7_bilinear = self.classifier(bi_feature)
         #   当输入为一张图片的时候，这里获得的f7的shape为[300, 2048]
-        fc7_noise = fc7_rgb.view(fc7_noise.size(0), -1)
+        fc7_bilinear = fc7_rgb.view(fc7_binear.size(0), -1)
         # fc7即为roi feature
-        roi_cls_locs_noise    = self.cls_loc(fc7_noise)
-        roi_cls_locs_noise    = roi_cls_locs_noise.view(n, -1, roi_cls_locs.size(1))
-
-        # For bounding box regression, we only use the RGB channels
-        roi_scores      = self.score(fc7_rgb)
-        roi_scores      = roi_scores.view(n, -1, roi_scores.size(1))
+        roi_scores = self.cls_pred(fc7_binear)
+        roi_scores = roi_scores.view(n, -1, roi_scores.size(1))
 
         if self.mode == 'training':
             """
@@ -108,12 +104,12 @@ class Resnet50RoIHead(nn.Module):
 
             # 每个roi的标签，有效roi下标，正样本roi下标
             labels, valid_indices, pos_indices = \
-                bbox_match(rois, gt_bboxes, neg_thres=0.3, pos_thres=0.7)
+                bbox_match(roi_bbox, gt_bboxes, neg_thres=0.3, pos_thres=0.7)
 
             self.loss_tamper += nn.CrossEntropyLoss(roi_scores, labels[valid_indices])
-            self.loss_bbox += nn.SmoothL1Loss(roi_cls_locs_rgb, gt_bboxes[pos_indices])
+            self.loss_bbox += nn.SmoothL1Loss(roi_bbox, gt_bboxes[pos_indices])
 
-        return roi_cls_locs_rgb, roi_cls_locs_noise, roi_scores
+        return roi_bbox, roi_scores
 
     def zero_loss(self):
         self.loss_tamper = 0

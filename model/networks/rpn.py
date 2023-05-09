@@ -187,7 +187,7 @@ class RPN(nn.Module):
             batch_index = i * torch.ones((len(roi),))  
             rois.append(roi.unsqueeze(0))
             scores.append(score.unsqueeze(0))
-            roi_indices.append(batch_index.unsqueeze(0))
+            roi_indices.append(batch_index)
 
         rois,       = torch.cat(rois, dim=0).type_as(x)
         roi_indices = torch.cat(roi_indices, dim=0).type_as(x)
