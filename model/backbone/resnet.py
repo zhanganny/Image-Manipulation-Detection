@@ -1,8 +1,13 @@
+import cv2
 import math
 
+import torch
 import torch.nn as nn
 import torch.utils.model_zoo as model_zoo
 from torch.hub import load_state_dict_from_url
+
+import torchvision
+import torchvision.transforms as transforms
 
 
 model_urls = {
@@ -66,29 +71,24 @@ class Bottleneck(nn.Module):
 class ResNet(nn.Module):
     def __init__(self, block, layers, num_classes=1000):
         super(ResNet, self).__init__()
-        #-----------------------------------#
-        #   假设输入进来的图片是600,600,3
-        #-----------------------------------#
         self.inplanes = 64
 
-        # 600,600,3 -> 300,300,64
+        # h, w, 3 -> h/2, w/2, 64
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, 
-                               stride=2, padding=3, bias=False)
+                               stride=2, dilation=1, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.relu = nn.ReLU(inplace=True)
-        # 300,300,64 -> 150,150,64
+
+        # h/2, w/2, 64 -> h/4, w/4, 64
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2,
                                     padding=0, ceil_mode=True)
 
-        # 150,150,64 -> 150,150,256
+        # h/2, w/2, 64 -> h/4, w/4, 256
         self.layer1 = self._make_layer(block, 64, layers[0])
-
-        # 150,150,256 -> 75,75,512
+        # h/2, w/2, 64 -> h/8, w/8, 512
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
-
-        # 75,75,512 -> 38,38,1024 到这里可以获得一个38,38,1024的共享特征层
+        # h/2, w/2, 64 -> h/16, w/16, 1024
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
-
         # self.layer4被用在classifier模型中
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
         
@@ -105,20 +105,17 @@ class ResNet(nn.Module):
 
     def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None
-
-        #-------------------------------------------------------------------#
-        #   当模型需要进行高和宽的压缩的时候，就需要用到残差边的downsample
-        #-------------------------------------------------------------------#
+        # 当模型需要进行高和宽的压缩的时候，就需要用到残差边的downsample
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
-                nn.Conv2d(self.inplanes, planes * block.expansion,kernel_size=1, stride=stride, bias=False),
+                nn.Conv2d(self.inplanes, planes * block.expansion,
+                        kernel_size=1, stride=stride, bias=False),
                 nn.BatchNorm2d(planes * block.expansion),
             )
+
         layers = []
         layers.append(block(self.inplanes, planes, stride, downsample))
-
         self.inplanes = planes * block.expansion
-
         for i in range(1, blocks):
             layers.append(block(self.inplanes, planes))
 
@@ -142,29 +139,56 @@ class ResNet(nn.Module):
         return x
 
 
-def resnet50(pretrained = False):
-
+def resnet50(pretrained=False):
     model = ResNet(Bottleneck, [3, 4, 6, 3])
-
     if pretrained:
-        state_dict = load_state_dict_from_url("https://download.pytorch.org/models/resnet50-19c8e357.pth", model_dir="./model_data")
-        model.load_state_dict(state_dict)
+        state_dict = load_state_dict_from_url(model_urls['resnet50'], 
+                                            model_dir="./model_data")
+        # state_dict = model_zoo.load_url(model_urls['resnet50'], model_dir="./model_data")
+        model.load_state_dict(state_dict, strict=True)
 
-    #----------------------------------------------------------------------------#
-    #   获取特征提取部分，从conv1到model.layer3，最终获得一个38,38,1024的特征层
-    #----------------------------------------------------------------------------#
-    features    = list([model.conv1, model.bn1, model.relu, model.maxpool, model.layer1, model.layer2, model.layer3])
+    # 获取特征提取部分，从conv1到model.layer3，最终获得一个38,38,1024的特征层
+    features = list([model.conv1, 
+                     model.bn1, 
+                     model.relu, 
+                     model.maxpool, 
+                     model.layer1, 
+                     model.layer2, 
+                     model.layer3])
+    features = nn.Sequential(*features)
 
-    #----------------------------------------------------------------------------#
-    #   获取分类部分，从model.layer4到model.avgpool
-    #----------------------------------------------------------------------------#
-    classifier  = list([model.layer4, model.avgpool])
-
-    features    = nn.Sequential(*features)
-
+    # 获取分类部分，从model.layer4到model.avgpool
+    classifier  = list([model.layer4, 
+                        model.avgpool])
     classifier  = nn.Sequential(*classifier)
+
     return features, classifier
 
 
-def resnet101():
-    pass
+def resnet101(pretrained=True):
+    assert pretrained == True
+    resnet_net = torchvision.models.resnet101(pretrained=True)
+    modules = list(resnet_net.children())
+
+    # print(modules[7:])
+
+    encoder = nn.Sequential(*modules[:7])
+    decoder = nn.Sequential(*modules[7:-1])
+
+    return encoder, decoder
+    
+
+if __name__ == "__main__":
+    img = cv2.imread("lena.png")
+    img = cv2.resize(img, (4096, 4096))
+    transformer = transforms.ToTensor()
+    img = transformer(img)
+    imgs = img.unsqueeze(0)
+
+    encoder, decoder = resnet101()
+    
+    print(imgs.size())      # [1, 3, 512, 512]
+    feature = encoder(imgs)
+    print(feature.size())   # [1, 1024, 32, 32]
+    cls = decoder(feature)
+    print(cls.size())       # [1, 2048, 1, 1]

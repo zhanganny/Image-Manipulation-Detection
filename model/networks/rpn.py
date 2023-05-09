@@ -1,6 +1,9 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+from torchvision.ops import nms
+
+import numpy as np
 from utils import _enumerate_shifted_anchor, \
                   generate_anchor_base, \
                   loc2bbox, \
@@ -111,6 +114,7 @@ class RPN(nn.Module):
             mode="training",
         ):
         super(RPN, self).__init__()
+        self.mode = mode
         #-----------------------------------------#
         #   生成基础先验框，shape为[9, 4]
         #-----------------------------------------#
@@ -183,7 +187,7 @@ class RPN(nn.Module):
             batch_index = i * torch.ones((len(roi),))  
             rois.append(roi.unsqueeze(0))
             scores.append(score.unsqueeze(0))
-            roi_indices.append(batch_index.unsqueeze(0))
+            roi_indices.append(batch_index)
 
         rois,       = torch.cat(rois, dim=0).type_as(x)
         roi_indices = torch.cat(roi_indices, dim=0).type_as(x)

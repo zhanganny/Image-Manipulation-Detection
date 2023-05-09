@@ -1,7 +1,7 @@
 import torch.nn as nn
 import torchvision
 
-from model.backbone import resnet50
+from model.backbone import resnet50, resnet101
 from model.networks import Resnet50RoIHead  #, VGG16RoIHead
 from model.networks import RPN, SRMLayer
 # from model.networs.vgg16 import decom_vgg16
@@ -14,8 +14,8 @@ class Fusion_FasterRCNN(nn.Module):
                  feat_stride = 16,
                  anchor_scales = [8, 16, 32],
                  anchor_ratios = [0.5, 1, 2],
-                 backbone = 'resnet50',
-                 pretrained = False
+                 backbone = 'resnet101',
+                 pretrained = True
                 ):
         super(Fusion_FasterRCNN, self).__init__()
         self.mode = "tarining"
@@ -23,15 +23,12 @@ class Fusion_FasterRCNN(nn.Module):
         self.anchor_scales = anchor_scales
         self.anchor_ratios = anchor_ratios
 
-        self.srm_filter_layer = SRMLayer()
+        # self.srm_filter_layer = SRMLayer()
         
         if backbone == 'resnet50':
             self.extractor, classifier = resnet50(pretrained)
         elif backbone == 'resnet101':
-            resnet_net = torchvision.models.resnet101(pretrained=True)
-            modules = list(resnet_net.children())[:-1]
-            self.extractor = nn.Sequential(*modules)
-            backbone.out_channels = 2048
+            self.extractor, classifier = resnet101(pretrained)
 
         self.rpn = RPN(
                 in_channels=1024, 
@@ -50,17 +47,12 @@ class Fusion_FasterRCNN(nn.Module):
             )
             
     def forward(self, x, scale=1., mode="forward", annotations=None):
-        print(x.size())
         if mode == "forward":
-            #---------------------------------#
-            #   计算输入图片的大小
-            #---------------------------------#
+            # 计算输入图片的大小
             img_size        = x.shape[2:]
-            #---------------------------------#
-            #   利用主干网络提取特征
-            #   RGB 和 noise使用同一backbone
-            #---------------------------------#
-            noise_x = self.srm_filter_layer(x)
+            # RGB 和 noise使用同一backbone
+            # noise_x = self.srm_filter_layer(x)
+            noise_x = x
             base_feature_rgb = self.extractor(x)
             base_feature_noise = self.extractor(noise_x)
             #---------------------------------#
