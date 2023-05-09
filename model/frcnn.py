@@ -9,7 +9,7 @@ from model.networks import RPN, SRMLayer
 
 class Fusion_FasterRCNN(nn.Module):
     def __init__(self, 
-                 num_classes,  
+                 num_classes=1,  
                  mode = "training",
                  feat_stride = 16,
                  anchor_scales = [8, 16, 32],
@@ -18,17 +18,17 @@ class Fusion_FasterRCNN(nn.Module):
                  pretrained = True
                 ):
         super(Fusion_FasterRCNN, self).__init__()
-        self.mode = "tarining"
+        self.mode = mode
         self.feat_stride = feat_stride
         self.anchor_scales = anchor_scales
         self.anchor_ratios = anchor_ratios
 
-        # self.srm_filter_layer = SRMLayer()
+        self.srm_filter_layer = SRMLayer()
         
         if backbone == 'resnet50':
-            self.extractor, classifier = resnet50(pretrained)
+            self.extractor, self.classifier = resnet50(pretrained)
         elif backbone == 'resnet101':
-            self.extractor, classifier = resnet101(pretrained)
+            self.extractor, self.classifier = resnet101(pretrained)
 
         self.rpn = RPN(
                 in_channels=1024, 
@@ -40,19 +40,18 @@ class Fusion_FasterRCNN(nn.Module):
             )
 
         self.head = Resnet50RoIHead(
-                n_class=num_classes + 1,
+                n_class=num_classes,
                 roi_size=7,
                 spatial_scale=0.0625, # 1 / 16
-                classifier=classifier
+                classifier=self.classifier
             )
             
     def forward(self, x, scale=1., mode="forward", annotations=None):
         if mode == "forward":
-            # 计算输入图片的大小
-            img_size        = x.shape[2:]
+            # 计算输入图片的大小 [H, W]
+            img_size = x.shape[2:]
+            noise_x = self.srm_filter_layer(x)
             # RGB 和 noise使用同一backbone
-            # noise_x = self.srm_filter_layer(x)
-            noise_x = x
             base_feature_rgb = self.extractor(x)
             base_feature_noise = self.extractor(noise_x)
             #---------------------------------#
@@ -64,7 +63,12 @@ class Fusion_FasterRCNN(nn.Module):
             #---------------------------------------#
             #   获得classifier的分类结果和回归结果
             #---------------------------------------#
-            roi_cls_locs, roi_scores    = self.head(base_feature_rgb, base_feature_noise, rois, roi_indices, img_size)
+            roi_cls_locs, roi_scores = self.head(x=base_feature_rgb, 
+                                                 x_noise=base_feature_noise, 
+                                                 rois=rois, 
+                                                 roi_indices=roi_indices, 
+                                                 img_size=img_size, 
+                                                 annotations=annotations)
             return roi_cls_locs, roi_scores, rois, roi_indices
         elif mode == "extractor":
             #---------------------------------#
@@ -86,6 +90,12 @@ class Fusion_FasterRCNN(nn.Module):
             #---------------------------------------#
             roi_cls_locs, roi_scores    = self.head(base_feature, rois, roi_indices, img_size)
             return roi_cls_locs, roi_scores
+
+    def train(self, mode=True):
+        super().train()
+        self.extractor.eval()
+        self.classifier.eval()
+        self.srm_filter_layer.eval()
 
     def zero_loss(self):
         self.rpn.zero_loss()

@@ -1,6 +1,8 @@
 import numpy as np
 import torch
 from torch.nn import functional as F
+
+import torchvision
 from torchvision.ops import nms, box_iou
 
 
@@ -9,7 +11,6 @@ def bbox_match(boxes1, boxes2, pos_thres=0.7, neg_thres=0.3):
         boxes1 (Tensor[N, 4]) first set of boxes
         boxes2 (Tensor[M, 4]) second set of boxes
     """
-    ious = torchvision.ops.box_iou(boxes1, boxes2)
     
     ones = torch.ones(ious.size())
     zeros = torch.zeros(ious.size())
@@ -17,8 +18,10 @@ def bbox_match(boxes1, boxes2, pos_thres=0.7, neg_thres=0.3):
     res = torch.where(ious < neg_thres, zeros, ious)
     res = torch.where(ious >= pos_thres, ones, res)
 
+    print(ious.size())
     valid_indices = torch.nonzero(ious < neg_thres or ious >= pos_thres, as_tuple=False)
     pos_indices = torch.nonzero(ious >= pos_thres, as_tuple=False)
+    
     return res, valid_indices, pos_indices
 
 

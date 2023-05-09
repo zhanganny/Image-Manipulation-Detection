@@ -5,8 +5,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from torchvision.ops import RoIPool
-from utils.utils_bbox import bbox_match
+from utils import bbox_match
 from CompactBilinearPooling import CompactBilinearPooling
+
 
 warnings.filterwarnings("ignore")
 
@@ -15,25 +16,19 @@ class Resnet50RoIHead(nn.Module):
     def __init__(self, n_class, roi_size, spatial_scale, classifier, mode='training'):
         super(Resnet50RoIHead, self).__init__()
         self.mode = mode
-        self.classifier = classifier
-        #--------------------------------------#
-        #   对ROIPooling后的的结果进行回归预测
-        #--------------------------------------#
-        self.bbox_pred = nn.Linear(2048, 4)
-        #-----------------------------------#
-        #   对ROIPooling后的的结果进行分类
-        #-----------------------------------#
-        self.cls_pred = nn.Linear(2048, 2)
-        #----------------------------，-------#
-        #   权值初始化
-        #-----------------------------------#
-        normal_init(self.bbox_pred, 0, 0.001)
-        normal_init(self.cls_pred, 0, 0.01)
 
         self.roi = RoIPool((roi_size, roi_size), spatial_scale)
-        # self.bilinear = nn.Bilinear(1024, 1024, 16384)
-        self.bilinear = CompactBilinearPooling(1024, 1024, 2048, cuda=False)
+        
+        self.classifier = classifier
+        self.bbox_pred = nn.Linear(2048, 4 * n_class)
 
+        # self.bilinear = nn.Bilinear(1024, 1024, 8)
+        self.bilinear = CompactBilinearPooling(1024, 1024, 8, cuda=False)
+        self.cls_pred = nn.Linear(8, n_class + 1)
+
+        normal_init(self.bbox_pred, 0, 0.001)
+        normal_init(self.cls_pred, 0, 0.01)
+        
         self.loss_tamper = 0
         self.loss_bbox = 0
 
@@ -50,9 +45,7 @@ class Resnet50RoIHead(nn.Module):
         if x.is_cuda:
             roi_indices = roi_indices.cuda()
             rois = rois.cuda()
-        # rois        = torch.flatten(rois, 0, 1)
-        # roi_indices = torch.flatten(roi_indices, 0, 1)
-        
+
         rois_feature_map_rgb = torch.zeros_like(rois)
         rois_feature_map_noise = torch.zeros_like(rois)
 
@@ -78,6 +71,7 @@ class Resnet50RoIHead(nn.Module):
         roi_bbox = roi_bbox.view(n, -1, roi_bbox.size(1))
 
         # step 3: Bilnear Pooling
+        print(pool_rgb.size(), pool_noise.size())
         bi_feature = self.bilinear(pool_rgb, pool_noise)
 
         # step 4: Class Pres        
@@ -85,7 +79,7 @@ class Resnet50RoIHead(nn.Module):
         #   当输入为一张图片的时候，这里获得的f7的shape为[300, 2048]
         # fc7_bilinear = fc7_rgb.view(fc7_binear.size(0), -1)
         # fc7即为roi feature
-        roi_scores = self.cls_pred(fc7_binear)
+        roi_scores = self.cls_pred(bi_feature)
         roi_scores = roi_scores.view(n, -1, roi_scores.size(1))
 
         if self.mode == 'training':
@@ -97,7 +91,7 @@ class Resnet50RoIHead(nn.Module):
             """
             assert annotations is not None
             gt_bboxes = []
-            for i in len(roi):
+            for i in range(len(rois)):
                 roi_index = roi_indices[i]
                 annotation = annotations[roi_index]
                 gt_bboxes.append(annotation)
@@ -110,6 +104,10 @@ class Resnet50RoIHead(nn.Module):
             self.loss_bbox += nn.SmoothL1Loss(roi_bbox, gt_bboxes[pos_indices])
 
         return roi_bbox, roi_scores
+
+    def train(self, mode=True):
+        super().train()
+        self.classifier.eval()
 
     def zero_loss(self):
         self.loss_tamper = 0
