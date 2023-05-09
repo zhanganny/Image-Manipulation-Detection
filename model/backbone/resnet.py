@@ -170,20 +170,25 @@ def resnet101(pretrained=True):
     resnet_net = torchvision.models.resnet101(pretrained=True)
     modules = list(resnet_net.children())
 
+    # print(modules[7:])
+
     encoder = nn.Sequential(*modules[:7])
-    decoder = nn.Sequential(*modules[7:])
+    decoder = nn.Sequential(*modules[7:-1])
 
     return encoder, decoder
     
 
 if __name__ == "__main__":
     img = cv2.imread("lena.png")
+    img = cv2.resize(img, (4096, 4096))
     transformer = transforms.ToTensor()
     img = transformer(img)
     imgs = img.unsqueeze(0)
 
     encoder, decoder = resnet101()
     
-    print(imgs.size())
+    print(imgs.size())      # [1, 3, 512, 512]
     feature = encoder(imgs)
-    print(feature.size())
+    print(feature.size())   # [1, 1024, 32, 32]
+    cls = decoder(feature)
+    print(cls.size())       # [1, 2048, 1, 1]
