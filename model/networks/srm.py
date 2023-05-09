@@ -2,16 +2,12 @@ import cv2
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torchvision import transforms
-from PIL import Image
-import matplotlib.pyplot as plt
 
 
 class SRMLayer(nn.Module):
     def __init__(self):
         super(SRMLayer, self).__init__()
-        self.q = [4.0, 12.0, 2.0]
         filter1 = [[0, 0, 0, 0, 0],
                    [0, -1, 2, -1, 0],
                    [0, 2, -4, 2, 0],
@@ -39,15 +35,12 @@ class SRMLayer(nn.Module):
         self.conv.weight = nn.Parameter(filters)
 
     def forward(self, x):
-        # x = F.conv2d(input=x, weight=self.conv.weight, bias=None,
-        #              stride=1, padding=2, dilation=1, groups=1)
         x = self.conv(x)
         return x
 
 
 def tst_srm(img_path, noise_path):
     # 读取图片
-    # img = Image.open(img_path)
     img = cv2.imread(img_path)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
