@@ -54,9 +54,8 @@ class Resnet50RoIHead(nn.Module):
         rois_feature_map[:, [0,2]] = rois[:, [0,2]] / img_size[1] * x.size()[3]
         rois_feature_map[:, [1,3]] = rois[:, [1,3]] / img_size[0] * x.size()[2]
         indices_and_rois = torch.cat([roi_indices, rois_feature_map], dim=1)
-        #   - RGB RoI feature
+        #   - RGB and Noise RoI feature -> [N, C, roi_size, roi_size]
         pool_rgb = self.roiPool(x, indices_and_rois)
-        #   - Noise RoI feature
         pool_noise = self.roiPool(x_noise, indices_and_rois)
 
         # step 2: BBox Pred (RGB channels only)
@@ -69,7 +68,6 @@ class Resnet50RoIHead(nn.Module):
         # roi_bbox = roi_bbox.view(n, -1, roi_bbox.size(1))
 
         # step 3: Bilnear Pooling
-        print(pool_rgb.size(), pool_noise.size())
         bi_feature = self.bilinear(pool_rgb, pool_noise)
 
         # step 4: Class Pres        

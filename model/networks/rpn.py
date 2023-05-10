@@ -227,12 +227,11 @@ class ProposalCreator():
         self, 
         mode, 
         nms_iou             = 0.7,
-        n_train_pre_nms     = 12000,
-        n_train_post_nms    = 600,
-        n_test_pre_nms      = 3000,
-        n_test_post_nms     = 300,
-        min_size            = 16
-    
+        n_train_pre_nms     = 10,
+        n_train_post_nms    = 5,
+        n_test_pre_nms      = 50,
+        n_test_post_nms     = 10,
+        min_size            = 64
     ):
         #   设置预测还是训练
         self.mode               = mode
