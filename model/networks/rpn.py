@@ -122,7 +122,7 @@ class RPN(nn.Module):
                             anchor_scales=anchor_scales, 
                             ratios=anchor_ratios
                            )
-        n_anchor            = self.anchor_base.shape[0]
+        n_anchor = self.anchor_base.shape[0]
 
         #-----------------------------------------#
         #   先进行一个3x3的卷积，可理解为特征整合
@@ -152,8 +152,8 @@ class RPN(nn.Module):
         # normal_init(self.score, 0, 0.01)
         # normal_init(self.loc, 0, 0.01)
 
-        self.smoothL1Loss = nn.SmoothL1Loss()
-        self.crossEntropyLoss = nn.CrossEntropyLoss()
+        self.smoothL1Loss = nn.SmoothL1Loss(reduction='mean')
+        self.crossEntropyLoss = nn.BCELoss(reduction='mean')
         self.rpn_loss_cls = 0
         self.rpn_loss_box = 0
 
@@ -172,8 +172,8 @@ class RPN(nn.Module):
         rpn_scores = self.score(x)
         rpn_scores = rpn_scores.permute(0, 2, 3, 1).contiguous().view(n, -1, 2)        
         rpn_softmax_scores  = F.softmax(rpn_scores, dim=-1)
-        rpn_fg_scores       = rpn_softmax_scores[:, :, 1].contiguous()
-        rpn_fg_scores       = rpn_fg_scores.view(n, -1)
+        rpn_fg_scores = rpn_softmax_scores[:, :, 1].contiguous()
+        rpn_fg_scores = rpn_fg_scores.view(n, -1)
 
         # step 2: 下面是获得先验框
         #   生成先验框，此时获得的anchor是布满网格点的，当输入图片为600,600,3的时候，shape为(12996, 4)
@@ -206,9 +206,9 @@ class RPN(nn.Module):
             labels, valid_indices, pos_indices = \
                 bbox_match(rois, annotations, neg_thres=0.3, pos_thres=0.7)
 
-            self.rpn_loss_box = self.smoothL1Loss(rois[pos_indices], annotations[0])
+            self.rpn_loss_box = self.smoothL1Loss(rois[pos_indices], annotations[0]) if len(pos_indices) > 0 else 0
             self.rpn_loss_cls = self.crossEntropyLoss(scores[valid_indices], labels[valid_indices])
-
+            
         return rpn_locs, rpn_scores, rois, roi_indices, anchor
 
     def zero_loss(self):
@@ -225,65 +225,63 @@ class RPN(nn.Module):
 class ProposalCreator():
     def __init__(
         self, 
-        mode, 
-        nms_iou             = 0.7,
-        n_train_pre_nms     = 10,
-        n_train_post_nms    = 5,
-        n_test_pre_nms      = 50,
-        n_test_post_nms     = 10,
-        min_size            = 64
+        mode='training', 
+        nms_iou=0.7,
+        n_train_pre_nms=100,
+        n_train_post_nms=10,
+        n_test_pre_nms=100,
+        n_test_post_nms=20,
+        min_size=0
     ):
-        #   设置预测还是训练
-        self.mode               = mode
-        #   建议框非极大抑制的iou大小
-        self.nms_iou            = nms_iou
+        self.mode = mode    # 设置预测还是训练
+        self.nms_iou = nms_iou  # 建议框非极大抑制的iou大小
         #   训练用到的建议框数量
-        self.n_train_pre_nms    = n_train_pre_nms
-        self.n_train_post_nms   = n_train_post_nms
+        self.n_train_pre_nms = n_train_pre_nms
+        self.n_train_post_nms = n_train_post_nms
         #   预测用到的建议框数量
-        self.n_test_pre_nms     = n_test_pre_nms
-        self.n_test_post_nms    = n_test_post_nms
-        self.min_size           = min_size
+        self.n_test_pre_nms = n_test_pre_nms
+        self.n_test_post_nms = n_test_post_nms
+        self.min_size = min_size
 
     def __call__(self, loc, score, anchor, img_size, scale=1.):
         if self.mode == "training":
-            n_pre_nms   = self.n_train_pre_nms
-            n_post_nms  = self.n_train_post_nms
+            n_pre_nms = self.n_train_pre_nms
+            n_post_nms = self.n_train_post_nms
         else:
-            n_pre_nms   = self.n_test_pre_nms
-            n_post_nms  = self.n_test_post_nms
+            n_pre_nms = self.n_test_pre_nms
+            n_post_nms = self.n_test_post_nms
 
-        # 转为与 loc 相同的数据类型 Tensor
+        # step 1: 为每个位置 (H, W) 生成 Bounding Box
         anchor = torch.from_numpy(anchor).type_as(loc)
-
-        # 基本框 anchor + 偏移 loc = 候选框 roi
         roi = loc2bbox(anchor, loc)
-        
-        # 裁剪候选框超出图像边缘的部分
+        # print(loc)
+
+        # step 2: 裁剪 Bounding Box 超出图像边缘的部分
         roi[:, [0, 2]] = torch.clamp(roi[:, [0, 2]], min = 0, max = img_size[1])
         roi[:, [1, 3]] = torch.clamp(roi[:, [1, 3]], min = 0, max = img_size[0])
         
-        # 建议框的宽高的最小值不可以小于16
-        min_size    = self.min_size * scale
-        keep        = torch.where(((roi[:, 2] - roi[:, 0]) >= min_size) & ((roi[:, 3] - roi[:, 1]) >= min_size))[0]
-        roi         = roi[keep, :]
-        score       = score[keep]
+        # step 3: 剔除边长过小的 Bounding Box
+        min_size = self.min_size * scale
+        keep = torch.where(((roi[:, 2] - roi[:, 0]) >= min_size) & ((roi[:, 3] - roi[:, 1]) >= min_size))[0]
+        roi = roi[keep, :]
+        score = score[keep]
 
-        # 取置信度前 n_pre_nms 高的候选框
-        order       = torch.argsort(score, descending=True)
-        if n_pre_nms > 0 and len(order) < n_pre_nms:
-            order   = order[:n_pre_nms]
-        roi     = roi[order, :]
-        score   = score[order]
+        # step 4: 取置信度前 n_pre_nms 高的候选框
+        order = torch.argsort(score, descending=True)
+        if len(order) > n_pre_nms:
+            order = order[:n_pre_nms]
+        roi = roi[order, :]
+        score = score[order]
 
-        # 对建议框进行非极大抑制
-        # 取置信度前 n_post_nms 高的候选框
-        keep    = nms(roi, score, self.nms_iou)
+        # step 5: 非极大值抑制
+        keep = nms(roi, score, self.nms_iou)
+        
+        # step 6: 取置信度前 n_post_nms 高的候选框
         if len(keep) < n_post_nms:
             index_extra = np.random.choice(range(len(keep)), size=(n_post_nms - len(keep)), replace=True)
-            keep        = torch.cat([keep, keep[index_extra]])
-        keep    = keep[:n_post_nms]
-        roi     = roi[keep]
-        score   = score[keep]
+            keep = torch.cat([keep, keep[index_extra]])
+        keep = keep[:n_post_nms]
+        roi = roi[keep]
+        score = score[keep]
 
         return roi, score

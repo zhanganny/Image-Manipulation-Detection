@@ -2,9 +2,8 @@ import torch.nn as nn
 import torchvision
 
 from model.backbone import resnet50, resnet101
-from model.networks import Resnet50RoIHead  #, VGG16RoIHead
+from model.networks import Resnet50RoIHead
 from model.networks import RPN, SRMLayer
-# from model.networs.vgg16 import decom_vgg16
 
 
 class Fusion_FasterRCNN(nn.Module):
@@ -14,7 +13,7 @@ class Fusion_FasterRCNN(nn.Module):
                  feat_stride = 16,
                  anchor_scales = [8, 16, 32],
                  anchor_ratios = [0.5, 1, 2],
-                 backbone = 'resnet101',
+                 backbone = 'resnet50',
                  pretrained = True
                 ):
         super(Fusion_FasterRCNN, self).__init__()
@@ -24,11 +23,7 @@ class Fusion_FasterRCNN(nn.Module):
         self.anchor_ratios = anchor_ratios
 
         self.srm_filter_layer = SRMLayer()
-        
-        if backbone == 'resnet50':
-            self.extractor, self.classifier = resnet50(pretrained)
-        elif backbone == 'resnet101':
-            self.extractor, self.classifier = resnet101(pretrained)
+        self.extractor, self.classifier = eval(backbone)(pretrained)
 
         self.rpn = RPN(
                 in_channels=1024, 
@@ -51,30 +46,23 @@ class Fusion_FasterRCNN(nn.Module):
             # 计算输入图片的大小 [H, W]
             img_size = x.shape[2:]
             noise_x = self.srm_filter_layer(x)
-            # RGB 和 noise使用同一backbone
+            # Stage 1
             base_feature_rgb = self.extractor(x)
             base_feature_noise = self.extractor(noise_x)
-            #---------------------------------#
-            #   获得建议框
-            #   The RGB and noise streams share the same region proposals 
-            #   from RPN network which only uses RGB features as input.
-            #---------------------------------#
             _, _, rois, roi_indices, _  = self.rpn(base_feature_rgb, img_size, scale, annotations)
-            #---------------------------------------#
-            #   获得classifier的分类结果和回归结果
-            #---------------------------------------#
+            # Stage 2
             roi_cls_locs, roi_scores = self.head(x=base_feature_rgb, 
                                                  x_noise=base_feature_noise, 
                                                  rois=rois, 
                                                  roi_indices=roi_indices, 
                                                  img_size=img_size, 
                                                  annotations=annotations)
-            return roi_cls_locs, roi_scores, rois, roi_indices
+            return roi_cls_locs, roi_scores
         elif mode == "extractor":
             #---------------------------------#
             #   利用主干网络提取特征
             #---------------------------------#
-            base_feature    = self.extractor(x)
+            base_feature = self.extractor(x)
             return base_feature
         elif mode == "rpn":
             base_feature, img_size = x
