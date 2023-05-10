@@ -15,8 +15,8 @@ def bbox_match(boxes1, boxes2, pos_thres=0.7, neg_thres=0.3):
     ious = torchvision.ops.box_iou(boxes1, boxes2) # [N, 1]
     ious = ious.squeeze(1)
     
-    ones = torch.ones(ious.size())
-    zeros = torch.zeros(ious.size())
+    ones = torch.ones(ious.size()).to(ious.device)
+    zeros = torch.zeros(ious.size()).to(ious.device)
     # valid 设置 ious 大于 pos_thred 或小于 neg_thred 的为 1, 其余为0
     res = torch.where(ious < neg_thres, zeros, ious)
     res = torch.where(ious >= pos_thres, ones, res)
@@ -32,15 +32,15 @@ def loc2bbox(src_bbox, loc):
     if src_bbox.size()[0] == 0:
         return torch.zeros((0, 4), dtype=loc.dtype)
 
-    src_width   = torch.unsqueeze(src_bbox[:, 2] - src_bbox[:, 0], -1)
-    src_height  = torch.unsqueeze(src_bbox[:, 3] - src_bbox[:, 1], -1)
-    src_ctr_x   = torch.unsqueeze(src_bbox[:, 0], -1) + 0.5 * src_width
-    src_ctr_y   = torch.unsqueeze(src_bbox[:, 1], -1) + 0.5 * src_height
+    src_width = torch.unsqueeze(src_bbox[:, 2] - src_bbox[:, 0], -1)
+    src_height = torch.unsqueeze(src_bbox[:, 3] - src_bbox[:, 1], -1)
+    src_ctr_x = torch.unsqueeze(src_bbox[:, 0], -1) + 0.5 * src_width
+    src_ctr_y = torch.unsqueeze(src_bbox[:, 1], -1) + 0.5 * src_height
 
-    dx          = loc[:, 0::4]
-    dy          = loc[:, 1::4]
-    dw          = loc[:, 2::4]
-    dh          = loc[:, 3::4]
+    dx = loc[:, 0::4]
+    dy = loc[:, 1::4]
+    dw = loc[:, 2::4]
+    dh = loc[:, 3::4]
 
     ctr_x = dx * src_width + src_ctr_x
     ctr_y = dy * src_height + src_ctr_y
@@ -54,6 +54,7 @@ def loc2bbox(src_bbox, loc):
     dst_bbox[:, 3::4] = ctr_y + 0.5 * h
 
     return dst_bbox
+
 
 class DecodeBox():
     def __init__(self, std, num_classes):

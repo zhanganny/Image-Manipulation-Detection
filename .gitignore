@@ -1,2 +1,4 @@
 .vscode/
 model_data/
+checkpoints/
+result/
