@@ -7,7 +7,7 @@ import torchvision.transforms as transforms
 
 
 class Train(Dataset):
-    def __init__(self, direc, transforms=transforms.Compose([transforms.ToTensor()])):
+    def __init__(self, direc, max_num=50, transforms=transforms.Compose([transforms.ToTensor()])):
         super(Train, self).__init__()
         self.transforms = transforms
         self.paths = []
@@ -15,7 +15,7 @@ class Train(Dataset):
 
         with open(direc + 'train.txt', 'r') as f:
             lines = f.readlines()
-            for line in lines:
+            for line in lines[:max_num]:
                 content = line.split(' ')
                 filename = content[0]
                 x1 = round(float(content[1]))

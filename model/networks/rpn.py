@@ -228,10 +228,10 @@ class ProposalCreator():
         mode='training', 
         nms_iou=0.7,
         n_train_pre_nms=100,
-        n_train_post_nms=20,
+        n_train_post_nms=10,
         n_test_pre_nms=100,
         n_test_post_nms=20,
-        min_size=8
+        min_size=0
     ):
         self.mode = mode    # 设置预测还是训练
         self.nms_iou = nms_iou  # 建议框非极大抑制的iou大小

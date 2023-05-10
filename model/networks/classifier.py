@@ -23,7 +23,7 @@ class Resnet50RoIHead(nn.Module):
         self.bbox_pred = nn.Linear(2048, 4 * n_class)
 
         # self.bilinear = nn.Bilinear(1024, 1024, 8)
-        self.bilinear = CompactBilinearPooling(1024, 1024, 16384, cuda=False)
+        self.bilinear = CompactBilinearPooling(1024, 1024, 16384, cuda=True)
         self.cls_pred = nn.Linear(16384, n_class + 1)
 
         # normal_init(self.bbox_pred, 0, 0.001)
@@ -64,8 +64,8 @@ class Resnet50RoIHead(nn.Module):
         #   - 当输入为一张图片的时候，这里获得的f7的shape为[300, 2048]
         fc7_rgb = fc7_rgb.view(fc7_rgb.size(0), -1)
         #   - fc7即为roi feature
-        print(fc7_rgb.size())
         roi_bbox = self.bbox_pred(fc7_rgb)
+        roi_bbox = roi_bbox + rois
         # roi_bbox = roi_bbox.view(n, -1, roi_bbox.size(1))
 
         # step 3: Bilnear Pooling

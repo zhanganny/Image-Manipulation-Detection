@@ -57,7 +57,7 @@ class Fusion_FasterRCNN(nn.Module):
                                                  roi_indices=roi_indices, 
                                                  img_size=img_size, 
                                                  annotations=annotations)
-            return roi_cls_locs, roi_scores, rois, roi_indices
+            return roi_cls_locs, roi_scores
         elif mode == "extractor":
             #---------------------------------#
             #   利用主干网络提取特征
