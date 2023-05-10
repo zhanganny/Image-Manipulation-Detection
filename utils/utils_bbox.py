@@ -20,6 +20,7 @@ def bbox_match(boxes1, boxes2, pos_thres=0.7, neg_thres=0.3):
     # valid 设置 ious 大于 pos_thred 或小于 neg_thred 的为 1, 其余为0
     res = torch.where(ious < neg_thres, zeros, ious)
     res = torch.where(ious >= pos_thres, ones, res)
+    res = res.unsqueeze(1)
 
     pos_indices = torch.nonzero(ious >= pos_thres, as_tuple=False).squeeze(1).tolist()
     valid_indices = torch.nonzero((ious < neg_thres) + (ious >= pos_thres), as_tuple=False).squeeze(1).tolist()

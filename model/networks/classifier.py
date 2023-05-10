@@ -29,6 +29,8 @@ class Resnet50RoIHead(nn.Module):
         normal_init(self.bbox_pred, 0, 0.001)
         normal_init(self.cls_pred, 0, 0.01)
         
+        self.smoothL1Loss = nn.SmoothL1Loss()
+        self.crossEntropyLoss = nn.CrossEntropyLoss()
         self.loss_tamper = 0
         self.loss_bbox = 0
 
@@ -53,12 +55,12 @@ class Resnet50RoIHead(nn.Module):
         #   - RGB RoI feature
         rois_feature_map_rgb[:, [0,2]] = rois[:, [0,2]] / img_size[1] * x.size()[3]
         rois_feature_map_rgb[:, [1,3]] = rois[:, [1,3]] / img_size[0] * x.size()[2]
-        indices_and_rois_rgb = torch.cat([roi_indices[:, None], rois_feature_map_rgb], dim=1)
+        indices_and_rois_rgb = torch.cat([roi_indices, rois_feature_map_rgb], dim=1)
         pool_rgb = self.roi(x, indices_and_rois_rgb)
         #   - Noise RoI feature
         rois_feature_map_noise[:, [0,2]] = rois[:, [0,2]] / img_size[1] * x_noise.size()[3]
         rois_feature_map_noise[:, [1,3]] = rois[:, [1,3]] / img_size[0] * x_noise.size()[2]
-        indices_and_rois_noise = torch.cat([roi_indices[:, None], rois_feature_map_noise], dim=1)
+        indices_and_rois_noise = torch.cat([roi_indices, rois_feature_map_noise], dim=1)
         pool_noise = self.roi(x_noise, indices_and_rois_noise)
 
         # step 2: BBox Pred (RGB channels only)
@@ -68,7 +70,7 @@ class Resnet50RoIHead(nn.Module):
         fc7_rgb = fc7_rgb.view(fc7_rgb.size(0), -1)
         #   - fc7即为roi feature
         roi_bbox = self.bbox_pred(fc7_rgb)
-        roi_bbox = roi_bbox.view(n, -1, roi_bbox.size(1))
+        # roi_bbox = roi_bbox.view(n, -1, roi_bbox.size(1))
 
         # step 3: Bilnear Pooling
         print(pool_rgb.size(), pool_noise.size())
@@ -80,24 +82,18 @@ class Resnet50RoIHead(nn.Module):
         # fc7_bilinear = fc7_rgb.view(fc7_binear.size(0), -1)
         # fc7即为roi feature
         roi_scores = self.cls_pred(bi_feature)
-        roi_scores = roi_scores.view(n, -1, roi_scores.size(1))
+        # roi_scores = roi_scores.view(n, -1, roi_scores.size(1))
 
         # 训练时计算 RPN Loss
         if self.mode == 'training': 
-            """
-            所有 roi 中: 
-                对于 IoU >= 0.7 的，认为其 p* 是 1 
-                对于 IoU < 0.3 的，认为其 p* 是 0
-                对于 0.3 <= IoU < 0.7 的，不计算 Loss
-            """
             assert annotations is not None
             # 每个roi的标签，有效roi下标，正样本roi下标
+            print(roi_bbox.size(), annotations.size())
             labels, valid_indices, pos_indices = \
                 bbox_match(roi_bbox, annotations, neg_thres=0.3, pos_thres=0.7)
 
-            for i in pos_indices:
-                self.loss_tamper += nn.SmoothL1Loss(roi_bbox[i], annotations[0])
-            self.loss_bbox = nn.CrossEntropyLoss(roi_scores[valid_indices], labels[valid_indices])
+            self.loss_tamper = self.smoothL1Loss(roi_bbox[pos_indices], annotations[0])
+            self.loss_bbox = self.crossEntropyLoss(roi_scores[valid_indices], labels[valid_indices])
 
         return roi_bbox, roi_scores
 
