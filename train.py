@@ -19,7 +19,7 @@ if __name__ == '__main__':
     parser.add_argument('--iteration', default=20)
     args = parser.parse_args()
 
-    use_cuda = False
+    use_cuda = True
 
     trainset = Train('D:/Datasets/coco_tampered/')
     trainloader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True)

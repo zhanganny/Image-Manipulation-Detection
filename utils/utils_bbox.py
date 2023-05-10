@@ -15,8 +15,8 @@ def bbox_match(boxes1, boxes2, pos_thres=0.7, neg_thres=0.3):
     ious = torchvision.ops.box_iou(boxes1, boxes2) # [N, 1]
     ious = ious.squeeze(1)
     
-    ones = torch.ones(ious.size())
-    zeros = torch.zeros(ious.size())
+    ones = torch.ones(ious.size()).to(ious.device)
+    zeros = torch.zeros(ious.size()).to(ious.device)
     # valid 设置 ious 大于 pos_thred 或小于 neg_thred 的为 1, 其余为0
     res = torch.where(ious < neg_thres, zeros, ious)
     res = torch.where(ious >= pos_thres, ones, res)

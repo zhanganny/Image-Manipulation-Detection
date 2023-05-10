@@ -64,6 +64,7 @@ class Resnet50RoIHead(nn.Module):
         #   - 当输入为一张图片的时候，这里获得的f7的shape为[300, 2048]
         fc7_rgb = fc7_rgb.view(fc7_rgb.size(0), -1)
         #   - fc7即为roi feature
+        print(fc7_rgb.size())
         roi_bbox = self.bbox_pred(fc7_rgb)
         # roi_bbox = roi_bbox.view(n, -1, roi_bbox.size(1))
 

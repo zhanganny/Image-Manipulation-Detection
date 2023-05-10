@@ -254,7 +254,7 @@ class ProposalCreator():
         # step 1: 为每个位置 (H, W) 生成 Bounding Box
         anchor = torch.from_numpy(anchor).type_as(loc)
         roi = loc2bbox(anchor, loc)
-        print(loc)
+        # print(loc)
 
         # step 2: 裁剪 Bounding Box 超出图像边缘的部分
         roi[:, [0, 2]] = torch.clamp(roi[:, [0, 2]], min = 0, max = img_size[1])
