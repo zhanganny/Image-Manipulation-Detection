@@ -17,8 +17,8 @@ class Resnet50RoIHead(nn.Module):
         super(Resnet50RoIHead, self).__init__()
         self.mode = mode
 
-        self.roi = RoIPool((roi_size, roi_size), spatial_scale)
-        
+        self.roiPool = RoIPool((roi_size, roi_size), spatial_scale)
+
         self.classifier = classifier
         self.bbox_pred = nn.Linear(2048, 4 * n_class)
 
@@ -48,20 +48,16 @@ class Resnet50RoIHead(nn.Module):
             roi_indices = roi_indices.cuda()
             rois = rois.cuda()
 
-        rois_feature_map_rgb = torch.zeros_like(rois)
-        rois_feature_map_noise = torch.zeros_like(rois)
-
         # step 1: RoI Pooling
+        #   - Two streams share the same feature map
+        rois_feature_map = torch.zeros_like(rois)
+        rois_feature_map[:, [0,2]] = rois[:, [0,2]] / img_size[1] * x.size()[3]
+        rois_feature_map[:, [1,3]] = rois[:, [1,3]] / img_size[0] * x.size()[2]
+        indices_and_rois = torch.cat([roi_indices, rois_feature_map], dim=1)
         #   - RGB RoI feature
-        rois_feature_map_rgb[:, [0,2]] = rois[:, [0,2]] / img_size[1] * x.size()[3]
-        rois_feature_map_rgb[:, [1,3]] = rois[:, [1,3]] / img_size[0] * x.size()[2]
-        indices_and_rois_rgb = torch.cat([roi_indices, rois_feature_map_rgb], dim=1)
-        pool_rgb = self.roi(x, indices_and_rois_rgb)
+        pool_rgb = self.roiPool(x, indices_and_rois)
         #   - Noise RoI feature
-        rois_feature_map_noise[:, [0,2]] = rois[:, [0,2]] / img_size[1] * x_noise.size()[3]
-        rois_feature_map_noise[:, [1,3]] = rois[:, [1,3]] / img_size[0] * x_noise.size()[2]
-        indices_and_rois_noise = torch.cat([roi_indices, rois_feature_map_noise], dim=1)
-        pool_noise = self.roi(x_noise, indices_and_rois_noise)
+        pool_noise = self.roiPool(x_noise, indices_and_rois)
 
         # step 2: BBox Pred (RGB channels only)
         #   - 利用classifier网络进行特征提取
@@ -88,12 +84,11 @@ class Resnet50RoIHead(nn.Module):
         if self.mode == 'training': 
             assert annotations is not None
             # 每个roi的标签，有效roi下标，正样本roi下标
-            print(roi_bbox.size(), annotations.size())
             labels, valid_indices, pos_indices = \
                 bbox_match(roi_bbox, annotations, neg_thres=0.3, pos_thres=0.7)
 
             self.loss_tamper = self.smoothL1Loss(roi_bbox[pos_indices], annotations[0])
-            self.loss_bbox = self.crossEntropyLoss(roi_scores[valid_indices], labels[valid_indices])
+            self.loss_bbox = self.crossEntropyLoss(roi_scores[valid_indices, 1].unsqueeze(1), labels[valid_indices])
 
         return roi_bbox, roi_scores
 
