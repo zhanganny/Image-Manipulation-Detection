@@ -152,6 +152,8 @@ class RPN(nn.Module):
         # normal_init(self.score, 0, 0.01)
         # normal_init(self.loc, 0, 0.01)
 
+        self.smoothL1Loss = nn.SmoothL1Loss()
+        self.crossEntropyLoss = nn.CrossEntropyLoss()
         self.rpn_loss_cls = 0
         self.rpn_loss_box = 0
 
@@ -184,37 +186,28 @@ class RPN(nn.Module):
         roi_indices = list()    # 指明 roi 属于 batch 里哪一个样本
         for i in range(n):
             roi, score = self.proposal_layer(rpn_locs[i], rpn_fg_scores[i], anchor, img_size, scale=scale)
-            batch_index = i * torch.ones((len(roi),))  
-            rois.append(roi.unsqueeze(0))
-            scores.append(score.unsqueeze(0))
-            roi_indices.append(batch_index)
+            # batch_index = i * torch.ones((len(roi),))  
+            batch_index = [i] * len(roi)
+            rois.append(roi)
+            scores.append(score)
+            roi_indices += batch_index
 
-        rois,       = torch.cat(rois, dim=0).type_as(x)
-        roi_indices = torch.cat(roi_indices, dim=0).type_as(x)
-        anchor      = torch.from_numpy(anchor).unsqueeze(0).float().to(x.device)
+        rois = torch.cat(rois, dim=0).type_as(x)
+        scores = torch.cat(scores, dim=0).unsqueeze(1)
+        # roi_indices = torch.cat(roi_indices, dim=0).type_as(x)
+        roi_indices = torch.Tensor(roi_indices).unsqueeze(1)
+        anchor = torch.from_numpy(anchor).unsqueeze(0).float().to(x.device)
         # 之后会用到这个建议框对共享特征层进行截取，截取之后进行roi pooling的操作，把大小固定到一样的shape上
 
         # 训练时计算 RPN Loss
         if self.mode == 'training': 
-            """
-            所有 roi 中: 
-                对于 IoU >= 0.7 的，认为其 p* 是 1 
-                对于 IoU < 0.3 的，认为其 p* 是 0
-                对于 0.3 <= IoU < 0.7 的，不计算 Loss
-            """
             assert annotations is not None
-            gt_bboxes = []
-            for i in len(roi):
-                roi_index = roi_indices[i]
-                annotation = annotations[roi_index]
-                gt_bboxes.append(annotation)
-
             # 每个roi的标签，有效roi下标，正样本roi下标
             labels, valid_indices, pos_indices = \
-                bbox_match(rois, gt_bboxes, neg_thres=0.3, pos_thres=0.7)
+                bbox_match(rois, annotations, neg_thres=0.3, pos_thres=0.7)
 
-            self.rpn_loss_cls += nn.CrossEntropyLoss(scores[valid_indices], labels[valid_indices])
-            self.rpn_loss_box += nn.SmoothL1Loss(rois[pos_indices], gt_bboxes[pos_indices])
+            self.rpn_loss_box = self.smoothL1Loss(rois[pos_indices], annotations[0])
+            self.rpn_loss_cls = self.crossEntropyLoss(scores[valid_indices], labels[valid_indices])
 
         return rpn_locs, rpn_scores, rois, roi_indices, anchor
 
@@ -234,12 +227,11 @@ class ProposalCreator():
         self, 
         mode, 
         nms_iou             = 0.7,
-        n_train_pre_nms     = 12000,
-        n_train_post_nms    = 600,
-        n_test_pre_nms      = 3000,
-        n_test_post_nms     = 300,
-        min_size            = 16
-    
+        n_train_pre_nms     = 10,
+        n_train_post_nms    = 5,
+        n_test_pre_nms      = 50,
+        n_test_post_nms     = 10,
+        min_size            = 64
     ):
         #   设置预测还是训练
         self.mode               = mode
@@ -294,4 +286,4 @@ class ProposalCreator():
         roi     = roi[keep]
         score   = score[keep]
 
-        return roi, score[1]
+        return roi, score

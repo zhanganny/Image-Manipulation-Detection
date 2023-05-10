@@ -138,15 +138,18 @@ if __name__ == '__main__':
     # top = compact_bilinear_pooling_layer(bottom1, bottom2, output_dim, sum_pool=True)
     # grad = tf.gradients(top, [bottom1, bottom2])
 
-    input_dim1 = 512
-    input_dim2 = 512
-    output_dim = 8000
+    batch_size = 1
+    input_dim1 = 1024
+    input_dim2 = 1024
+    output_dim = 16384
 
-    bottom1 = Variable(torch.randn(128, 512, 14, 14)).cuda()  # [batch_size, input_dim1, height, width]
-    bottom2 = Variable(torch.randn(128, 512, 14, 14)).cuda()
+    bottom1 = Variable(torch.randn(batch_size, input_dim1, 7, 7)).cuda()  # [batch_size, input_dim1, height, width]
+    bottom2 = Variable(torch.randn(batch_size, input_dim2, 7, 7)).cuda()
 
     layer = CompactBilinearPooling(input_dim1, input_dim2, output_dim)  # (input_size, input_size, output_size)
     layer.cuda()
     layer.train()
 
     out = layer(bottom1, bottom2)
+
+    print(out.size())

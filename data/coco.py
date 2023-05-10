@@ -28,6 +28,7 @@ class Train(Dataset):
     def __getitem__(self, index):
         path = self.paths[index]
         item = Image.open(path).convert('RGB')
+        item.resize((32, 32))
         if self.transforms is not None:
             item = self.transforms(item)
             annotation = torch.Tensor(self.annotations[index])

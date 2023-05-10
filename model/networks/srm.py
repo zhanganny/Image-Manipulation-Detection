@@ -26,13 +26,16 @@ class SRMLayer(nn.Module):
         filter1 = np.array(filter1) / 4
         filter2 = np.array(filter2) / 12
         filter3 = np.array(filter3) / 2
-        filters = np.array([[filter1, filter2, filter3]])  # shape=(5,5,3)
+        filters = np.array([[filter1, filter1, filter1],
+                            [filter2, filter2, filter2],
+                            [filter3, filter3, filter3]])  # shape=(5,5,3)
         filters = torch.tensor(filters, dtype=torch.float)
         # print(filters)
 
         self.conv = nn.Conv2d(in_channels=3, out_channels=3, kernel_size=5, stride=1, padding=2,
                               bias=False)  # 输入和输出通道数都为3，卷积核大小为5x5，stride为1，padding为2（same填充方式填充kernel_size/2（向下取整）；valid不填充）
-        self.conv.weight = nn.Parameter(filters)
+        self.conv.weight.data = nn.Parameter(filters)
+        # print(self.conv.weight)
 
     def forward(self, x):
         x = self.conv(x)
@@ -65,6 +68,8 @@ def tst_srm(img_path, noise_path):
         noise_img = srm_layer(input_tensor)
     # noise_img = srm_layer(input_tensor)
 
+    print(noise_img.size())
+
     # 将张量转换为图片
     noise_img = noise_img.squeeze(0).permute(1, 2, 0).numpy()
     noise_img = cv2.cvtColor(noise_img, cv2.COLOR_RGB2BGR)
@@ -73,9 +78,10 @@ def tst_srm(img_path, noise_path):
     # 显示噪声图片
     cv2.imshow('Noise Image', noise_img)
     cv2.imwrite(noise_path, noise_img)
+    cv2.waitKey()
 
 
 if __name__ == '__main__':
-    img_path = '../../lena.png'
-    noise_path = '../../noise.png'
+    img_path = 'lena.png'
+    noise_path = 'noise.png'
     tst_srm(img_path, noise_path)
