@@ -38,7 +38,7 @@ if __name__ == '__main__':
             if use_cuda:
                 imgs = imgs.cuda()
                 annotations = annotations.cuda()
-
+            
             model(imgs, annotations=annotations)
             optimizer.zero_grad()
             loss = model.loss()
@@ -46,7 +46,7 @@ if __name__ == '__main__':
             loss.backward()
             optimizer.step()
             print("epoch: {}\tstep: {}\tloss: {}".format(epoch, step, loss))
-        
-        if epoch % 5 == 0:
+
+        if epoch % 1 == 0:
             print("checkpoint {}".format(epoch))
             model.eval()

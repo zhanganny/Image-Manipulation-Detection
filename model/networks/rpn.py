@@ -227,16 +227,14 @@ class ProposalCreator():
         self, 
         mode='training', 
         nms_iou=0.7,
-        n_train_pre_nms=10,
-        n_train_post_nms=5,
-        n_test_pre_nms=50,
-        n_test_post_nms=10,
-        min_size=16
+        n_train_pre_nms=100,
+        n_train_post_nms=20,
+        n_test_pre_nms=100,
+        n_test_post_nms=20,
+        min_size=8
     ):
-        #   设置预测还是训练
-        self.mode = mode
-        #   建议框非极大抑制的iou大小
-        self.nms_iou = nms_iou
+        self.mode = mode    # 设置预测还是训练
+        self.nms_iou = nms_iou  # 建议框非极大抑制的iou大小
         #   训练用到的建议框数量
         self.n_train_pre_nms = n_train_pre_nms
         self.n_train_post_nms = n_train_post_nms
@@ -256,7 +254,8 @@ class ProposalCreator():
         # step 1: 为每个位置 (H, W) 生成 Bounding Box
         anchor = torch.from_numpy(anchor).type_as(loc)
         roi = loc2bbox(anchor, loc)
-        
+        print(loc)
+
         # step 2: 裁剪 Bounding Box 超出图像边缘的部分
         roi[:, [0, 2]] = torch.clamp(roi[:, [0, 2]], min = 0, max = img_size[1])
         roi[:, [1, 3]] = torch.clamp(roi[:, [1, 3]], min = 0, max = img_size[0])

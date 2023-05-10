@@ -32,15 +32,15 @@ def loc2bbox(src_bbox, loc):
     if src_bbox.size()[0] == 0:
         return torch.zeros((0, 4), dtype=loc.dtype)
 
-    src_width   = torch.unsqueeze(src_bbox[:, 2] - src_bbox[:, 0], -1)
-    src_height  = torch.unsqueeze(src_bbox[:, 3] - src_bbox[:, 1], -1)
-    src_ctr_x   = torch.unsqueeze(src_bbox[:, 0], -1) + 0.5 * src_width
-    src_ctr_y   = torch.unsqueeze(src_bbox[:, 1], -1) + 0.5 * src_height
+    src_width = torch.unsqueeze(src_bbox[:, 2] - src_bbox[:, 0], -1)
+    src_height = torch.unsqueeze(src_bbox[:, 3] - src_bbox[:, 1], -1)
+    src_ctr_x = torch.unsqueeze(src_bbox[:, 0], -1) + 0.5 * src_width
+    src_ctr_y = torch.unsqueeze(src_bbox[:, 1], -1) + 0.5 * src_height
 
-    dx          = loc[:, 0::4]
-    dy          = loc[:, 1::4]
-    dw          = loc[:, 2::4]
-    dh          = loc[:, 3::4]
+    dx = loc[:, 0::4]
+    dy = loc[:, 1::4]
+    dw = loc[:, 2::4]
+    dh = loc[:, 3::4]
 
     ctr_x = dx * src_width + src_ctr_x
     ctr_y = dy * src_height + src_ctr_y
@@ -54,6 +54,7 @@ def loc2bbox(src_bbox, loc):
     dst_bbox[:, 3::4] = ctr_y + 0.5 * h
 
     return dst_bbox
+
 
 class DecodeBox():
     def __init__(self, std, num_classes):
