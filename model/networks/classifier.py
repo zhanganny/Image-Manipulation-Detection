@@ -23,14 +23,14 @@ class Resnet50RoIHead(nn.Module):
         self.bbox_pred = nn.Linear(2048, 4 * n_class)
 
         # self.bilinear = nn.Bilinear(1024, 1024, 8)
-        self.bilinear = CompactBilinearPooling(1024, 1024, 8, cuda=False)
-        self.cls_pred = nn.Linear(8, n_class + 1)
+        self.bilinear = CompactBilinearPooling(1024, 1024, 16384, cuda=False)
+        self.cls_pred = nn.Linear(16384, n_class + 1)
 
-        normal_init(self.bbox_pred, 0, 0.001)
-        normal_init(self.cls_pred, 0, 0.01)
+        # normal_init(self.bbox_pred, 0, 0.001)
+        # normal_init(self.cls_pred, 0, 0.01)
         
-        self.smoothL1Loss = nn.SmoothL1Loss()
-        self.crossEntropyLoss = nn.CrossEntropyLoss()
+        self.smoothL1Loss = nn.SmoothL1Loss(reduction='mean')
+        self.crossEntropyLoss = nn.BCELoss(reduction='mean')
         self.loss_tamper = 0
         self.loss_bbox = 0
 
@@ -75,7 +75,7 @@ class Resnet50RoIHead(nn.Module):
         #   当输入为一张图片的时候，这里获得的f7的shape为[300, 2048]
         # fc7_bilinear = fc7_rgb.view(fc7_binear.size(0), -1)
         # fc7即为roi feature
-        roi_scores = self.cls_pred(bi_feature)
+        roi_scores = F.softmax(self.cls_pred(bi_feature), dim=1)
         # roi_scores = roi_scores.view(n, -1, roi_scores.size(1))
 
         # 训练时计算 RPN Loss
@@ -85,7 +85,7 @@ class Resnet50RoIHead(nn.Module):
             labels, valid_indices, pos_indices = \
                 bbox_match(roi_bbox, annotations, neg_thres=0.3, pos_thres=0.7)
 
-            self.loss_tamper = self.smoothL1Loss(roi_bbox[pos_indices], annotations[0])
+            self.loss_tamper = self.smoothL1Loss(roi_bbox[pos_indices], annotations[0]) if len(pos_indices) > 0 else 0
             self.loss_bbox = self.crossEntropyLoss(roi_scores[valid_indices, 1].unsqueeze(1), labels[valid_indices])
 
         return roi_bbox, roi_scores

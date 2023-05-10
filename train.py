@@ -34,11 +34,10 @@ if __name__ == '__main__':
     for epoch in range(args.iteration):
         model.train()
         for step, (imgs, annotations) in enumerate(trainloader):
-            print(imgs.size(), annotations)
-            
+            # print(imgs.size(), annotations)
             if use_cuda:
-                imgs.cuda()
-                annotations.cuda()
+                imgs = imgs.cuda()
+                annotations = annotations.cuda()
 
             model(imgs, annotations=annotations)
             optimizer.zero_grad()
@@ -46,7 +45,8 @@ if __name__ == '__main__':
             model.zero_loss()
             loss.backward()
             optimizer.step()
-
+            print("epoch: {}\tstep: {}\tloss: {}".format(epoch, step, loss))
+        
         if epoch % 5 == 0:
             print("checkpoint {}".format(epoch))
             model.eval()

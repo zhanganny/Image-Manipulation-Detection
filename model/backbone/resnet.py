@@ -139,30 +139,43 @@ class ResNet(nn.Module):
         return x
 
 
-def resnet50(pretrained=False):
-    model = ResNet(Bottleneck, [3, 4, 6, 3])
-    if pretrained:
-        state_dict = load_state_dict_from_url(model_urls['resnet50'], 
-                                            model_dir="./model_data")
-        # state_dict = model_zoo.load_url(model_urls['resnet50'], model_dir="./model_data")
-        model.load_state_dict(state_dict, strict=True)
+# def resnet50(pretrained=False):
+#     model = ResNet(Bottleneck, [3, 4, 6, 3])
+#     if pretrained:
+#         state_dict = load_state_dict_from_url(model_urls['resnet50'], 
+#                                             model_dir="./model_data")
+#         # state_dict = model_zoo.load_url(model_urls['resnet50'], model_dir="./model_data")
+#         model.load_state_dict(state_dict, strict=True)
 
-    # 获取特征提取部分，从conv1到model.layer3，最终获得一个38,38,1024的特征层
-    features = list([model.conv1, 
-                     model.bn1, 
-                     model.relu, 
-                     model.maxpool, 
-                     model.layer1, 
-                     model.layer2, 
-                     model.layer3])
-    features = nn.Sequential(*features)
+#     # 获取特征提取部分，从conv1到model.layer3，最终获得一个38,38,1024的特征层
+#     features = list([model.conv1, 
+#                      model.bn1, 
+#                      model.relu, 
+#                      model.maxpool, 
+#                      model.layer1, 
+#                      model.layer2, 
+#                      model.layer3])
+#     features = nn.Sequential(*features)
 
-    # 获取分类部分，从model.layer4到model.avgpool
-    classifier  = list([model.layer4, 
-                        model.avgpool])
-    classifier  = nn.Sequential(*classifier)
+#     # 获取分类部分，从model.layer4到model.avgpool
+#     classifier  = list([model.layer4, 
+#                         model.avgpool])
+#     classifier  = nn.Sequential(*classifier)
 
-    return features, classifier
+#     return features, classifier
+
+
+def resnet50(pretrained=True):
+    assert pretrained == True
+    resnet_net = torchvision.models.resnet50(pretrained=True)
+    modules = list(resnet_net.children())
+
+    # print(modules[7:])
+
+    encoder = nn.Sequential(*modules[:7])
+    decoder = nn.Sequential(*modules[7:-1])
+
+    return encoder, decoder
 
 
 def resnet101(pretrained=True):
@@ -180,7 +193,7 @@ def resnet101(pretrained=True):
 
 if __name__ == "__main__":
     img = cv2.imread("lena.png")
-    img = cv2.resize(img, (4096, 4096))
+    # img = cv2.resize(img, (4096, 4096))
     transformer = transforms.ToTensor()
     img = transformer(img)
     imgs = img.unsqueeze(0)
