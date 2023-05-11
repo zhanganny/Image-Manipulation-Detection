@@ -79,7 +79,7 @@ class Resnet50RoIHead(nn.Module):
         roi_scores = F.softmax(self.cls_pred(bi_feature), dim=1)
         # roi_scores = roi_scores.view(n, -1, roi_scores.size(1))
 
-        # 训练时计算 RPN Loss
+        # 训练时计算 tamper, bbox Loss
         if self.mode == 'training': 
             assert annotations is not None
             # 每个roi的标签，有效roi下标，正样本roi下标
